@@ -16,7 +16,7 @@ resource "google_compute_instance" "airflow" {
     initialize_params {
       # Ubuntu 22.04 LTS — estable, bien documentado y compatible con Airflow
       image = "ubuntu-os-cloud/ubuntu-2204-lts"
-      size  = 30  # GB — máximo gratuito en el free tier
+      size  = 30 # GB — máximo gratuito en el free tier
       type  = "pd-standard"
     }
   }
