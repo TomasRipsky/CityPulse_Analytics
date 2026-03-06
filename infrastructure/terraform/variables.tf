@@ -21,3 +21,9 @@ variable "environment" {
   type        = string
   default     = "prod"
 }
+
+variable "my_ip" {
+  description = "Tu IP personal para restringir acceso SSH y Airflow UI"
+  type        = string
+  default     = "79.116.174.196"
+}
