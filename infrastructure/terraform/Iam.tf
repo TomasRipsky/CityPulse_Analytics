@@ -19,7 +19,7 @@ resource "google_service_account" "citypulse_sa" {
 locals {
   sa_roles = [
     "roles/storage.objectAdmin",            # Leer y escribir objetos en GCS (Data Lake)
-    "roles/bigquery.dataEditor",            # Leer y escribir datos en BigQuery
+    "roles/bigquery.dataOwner",             # Gestionar datasets y datos en BigQuery
     "roles/bigquery.jobUser",               # Ejecutar queries en BigQuery (necesario para DBT)
     "roles/iam.serviceAccountTokenCreator", # Permitir que GitHub Actions se autentique
   ]
@@ -35,7 +35,6 @@ resource "google_project_iam_member" "citypulse_sa_roles" {
 
 # -----------------------------------------------------------------------------
 # Output — Email de la Service Account
-# Lo necesitaremos para configurar el secreto en GitHub Actions.
 # -----------------------------------------------------------------------------
 
 output "service_account_email" {
