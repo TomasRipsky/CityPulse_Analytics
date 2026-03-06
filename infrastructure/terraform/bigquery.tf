@@ -9,7 +9,7 @@
 resource "google_bigquery_dataset" "staging" {
   dataset_id    = "citypulse_staging"
   friendly_name = "CityPulse - Staging"
-  description   = "Datos cargados desde GCS Silver, sin transformaciones analíticas. Uso exclusivo de pipelines."
+  description   = "Datos cargados desde GCS Silver. Uso exclusivo de pipelines. No usar directamente en dashboards."
   location      = var.region
 
   # Sin expiración de tablas: el pipeline controla el ciclo de vida.
