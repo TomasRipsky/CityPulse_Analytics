@@ -18,9 +18,9 @@ resource "google_service_account" "citypulse_sa" {
 
 locals {
   sa_roles = [
-    "roles/storage.objectAdmin",       # Leer y escribir objetos en GCS (Data Lake)
-    "roles/bigquery.dataEditor",       # Leer y escribir datos en BigQuery
-    "roles/bigquery.jobUser",          # Ejecutar queries en BigQuery (necesario para DBT)
+    "roles/storage.objectAdmin",            # Leer y escribir objetos en GCS (Data Lake)
+    "roles/bigquery.dataEditor",            # Leer y escribir datos en BigQuery
+    "roles/bigquery.jobUser",               # Ejecutar queries en BigQuery (necesario para DBT)
     "roles/iam.serviceAccountTokenCreator", # Permitir que GitHub Actions se autentique
   ]
 }
