@@ -15,8 +15,9 @@
 4. [Fuentes de Datos](#fuentes-de-datos)
 5. [Setup Inicial](#setup-inicial)
 6. [Ingesta de Datos](#ingesta-de-datos)
-7. [CI/CD](#cicd)
-8. [Fases del Proyecto](#fases-del-proyecto)
+7. [Orquestación con Airflow](#orquestación-con-airflow)
+8. [CI/CD](#cicd)
+9. [Fases del Proyecto](#fases-del-proyecto)
 
 ---
 
@@ -36,7 +37,7 @@ de la industria que separa claramente cada etapa del ciclo de vida del dato.
                └──────────────────┴──────────────────┘
                                   │
                           [Airflow DAGs]
-                        Orquestación y scheduling
+                     GCP VM e2-micro — us-central1
                                   │
                ┌──────────────────┴──────────────────┐
                │                                      │
@@ -81,7 +82,8 @@ de la industria que separa claramente cada etapa del ciclo de vida del dato.
 | Capa | Tecnología | Rol |
 |------|-----------|-----|
 | Lenguaje | Python 3.11 | Extractores e ingesta |
-| Orquestación | Apache Airflow | Scheduling y dependencias |
+| Orquestación | Apache Airflow 2.8.1 | Scheduling y dependencias |
+| Infraestructura Airflow | GCP VM e2-micro | Hosting gratuito 24/7 |
 | Data Lake | Google Cloud Storage | Capas Bronze y Silver |
 | Data Warehouse | BigQuery | Capa Gold y consultas analíticas |
 | Transformaciones | DBT Core | Modelos y tests de calidad |
@@ -108,6 +110,8 @@ citypulse-analytics/
 │       ├── gcs.tf                  # Data Lake (GCS)
 │       ├── bigquery.tf             # Data Warehouse (BigQuery)
 │       ├── Iam.tf                  # Service Account y permisos
+│       ├── compute.tf              # VM para Airflow
+│       ├── firewall.tf             # Reglas de acceso a la VM
 │       └── outputs.tf              # Outputs útiles
 │
 ├── ingestion/
@@ -123,7 +127,11 @@ citypulse-analytics/
 │   │   └── gcs_loader.py           # Subida a GCS Bronze
 │   └── requirements.txt
 │
-├── orchestration/                  # Airflow DAGs (Fase 3)
+├── orchestration/                  # Airflow DAGs
+│   └── dags/
+│       ├── daily_ingestion_dag.py  # Clima y calidad del aire (diario)
+│       └── monthly_ingestion_dag.py# Citibike (mensual)
+│
 ├── transformation/                 # Modelos DBT (Fase 4)
 │
 ├── .env                            # Variables locales (no se sube al repo)
@@ -206,6 +214,7 @@ gcloud services enable \
   cloudresourcemanager.googleapis.com \
   storage.googleapis.com \
   bigquery.googleapis.com \
+  compute.googleapis.com \
   --project=your-project-id
 ```
 
@@ -225,31 +234,43 @@ terraform apply
 
 ### 6. Permisos de bootstrap
 
-Dos permisos que deben configurarse manualmente una única vez, ya que
-son previos al funcionamiento del pipeline y Terraform no puede
-otorgárselos a sí mismo.
+Permisos que deben configurarse manualmente una única vez, ya que
+son previos al funcionamiento del pipeline.
 
-**Acceso de la Service Account al bucket de estado de Terraform:**
-
+**Acceso al bucket de estado de Terraform:**
 ```bash
 gsutil iam ch \
   serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com:roles/storage.admin \
   gs://BUCKET_NAME
 ```
 
-**Permiso para gestionar políticas IAM del proyecto:**
-
+**Gestión de políticas IAM:**
 ```bash
 gcloud projects add-iam-policy-binding PROJECT_ID \
   --member="serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/resourcemanager.projectIamAdmin"
 ```
 
+**Permisos de Compute:**
+```bash
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/compute.admin"
+```
+
+**Permisos de Service Account User en la VM:**
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+  citypulse-sa@PROJECT_ID.iam.gserviceaccount.com \
+  --member="serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser" \
+  --project=PROJECT_ID
+```
+
 ### 7. Configurar CI/CD con Workload Identity Federation
 
 Este proyecto usa **Workload Identity Federation** en lugar de claves JSON.
-Es la práctica recomendada por Google: GitHub Actions obtiene tokens
-efímeros de corta duración sin necesidad de gestionar ningún secreto.
+GitHub Actions obtiene tokens efímeros sin necesidad de gestionar secretos.
 
 ```
 Sin Workload Identity:
@@ -262,7 +283,6 @@ GitHub Actions → token OIDC efímero → GCP verifica con GitHub → acceso
 ```
 
 **Crear el Workload Identity Pool:**
-
 ```bash
 gcloud iam workload-identity-pools create "github-pool" \
   --project="PROJECT_ID" \
@@ -270,8 +290,7 @@ gcloud iam workload-identity-pools create "github-pool" \
   --display-name="GitHub Actions Pool"
 ```
 
-**Crear el Provider** (reemplaza `USER/REPO` con tus valores):
-
+**Crear el Provider:**
 ```bash
 gcloud iam workload-identity-pools providers create-oidc "github-provider" \
   --project="PROJECT_ID" \
@@ -284,7 +303,6 @@ gcloud iam workload-identity-pools providers create-oidc "github-provider" \
 ```
 
 **Vincular la Service Account al Pool:**
-
 ```bash
 gcloud iam service-accounts add-iam-policy-binding \
   citypulse-sa@PROJECT_ID.iam.gserviceaccount.com \
@@ -294,7 +312,6 @@ gcloud iam service-accounts add-iam-policy-binding \
 ```
 
 **Obtener el identificador del provider:**
-
 ```bash
 gcloud iam workload-identity-pools providers describe github-provider \
   --project="PROJECT_ID" \
@@ -315,9 +332,6 @@ gcloud iam workload-identity-pools providers describe github-provider \
 
 ## Ingesta de Datos
 
-Los extractores son scripts Python independientes, listos para ser
-orquestados por Airflow en la Fase 3.
-
 ### Instalar dependencias
 
 ```bash
@@ -326,14 +340,14 @@ pip install -r ingestion/requirements.txt
 
 ### Ejecutar los extractores
 
-Todos los extractores soportan `--dry-run` para validar sin escribir en GCS,
-y `--date` / `--year` / `--month` para extraer fechas específicas (backfill).
+Todos los extractores soportan `--dry-run` para validar sin escribir en GCS
+y permiten extraer fechas específicas para backfill.
 
 **Clima (diario):**
 ```bash
-python -m ingestion.run_weather --dry-run      # validar
-python -m ingestion.run_weather                # extraer hoy
-python -m ingestion.run_weather --date 2025-01-15  # backfill
+python -m ingestion.run_weather --dry-run
+python -m ingestion.run_weather
+python -m ingestion.run_weather --date 2025-01-15
 ```
 
 **Calidad del aire (diario):**
@@ -371,6 +385,128 @@ gs://city-pulse-tr/
 
 ---
 
+## Orquestación con Airflow
+
+Airflow corre en una VM **e2-micro de GCP (free tier)** como servicio
+permanente gestionado por `systemd`. Arranca automáticamente con la VM
+y se reinicia solo si falla.
+
+### ¿Por qué una VM y no Cloud Composer?
+
+Cloud Composer tiene un coste de ~375€/mes. La VM e2-micro es **permanentemente
+gratuita** en GCP y es suficiente para el volumen de este proyecto gracias
+a la configuración de swap.
+
+### Configuración de la VM
+
+La VM se crea automáticamente con Terraform. Una vez creada, los pasos
+de configuración son los siguientes.
+
+**Conectarse a la VM:**
+```bash
+gcloud compute ssh citypulse-airflow \
+  --zone=us-central1-a \
+  --project=PROJECT_ID
+```
+
+**Añadir swap (necesario para 1GB de RAM):**
+```bash
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+**Instalar Airflow:**
+```bash
+python3 -m venv ~/airflow-env
+source ~/airflow-env/bin/activate
+pip install "apache-airflow==2.8.1" \
+  --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.8.1/constraints-3.10.txt"
+```
+
+**Inicializar Airflow y crear usuario admin:**
+```bash
+export AIRFLOW_HOME=~/airflow
+airflow db init
+airflow users create \
+  --username admin \
+  --password admin \
+  --firstname Tu \
+  --lastname Nombre \
+  --role Admin \
+  --email tu@email.com
+```
+
+**Configurar Airflow como servicio systemd:**
+```bash
+sudo nano /etc/systemd/system/airflow.service
+```
+
+Contenido del archivo (reemplaza `usuario` con tu usuario de la VM):
+```ini
+[Unit]
+Description=Airflow Standalone
+After=network.target
+
+[Service]
+User=usuario
+Environment=AIRFLOW_HOME=/home/usuario/airflow
+Environment=AIRFLOW__CORE__LOAD_EXAMPLES=False
+Environment=PATH=/home/usuario/airflow-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/usuario/airflow-env/bin/airflow standalone
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Activar e iniciar el servicio:**
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable airflow
+sudo systemctl start airflow
+```
+
+**Verificar que está corriendo:**
+```bash
+sudo systemctl status airflow
+```
+
+### Acceder a la UI de Airflow
+
+Debido a restricciones del ISP con el puerto 8080, el acceso se realiza
+mediante un **túnel SSH**. Este es un método estándar y seguro para acceder
+a servicios internos sin exponerlos públicamente.
+
+```
+Sin túnel: navegador → internet → puerto 8080 VM  ❌ bloqueado por ISP
+Con túnel: navegador → localhost:8080 → SSH (puerto 22) → VM → Airflow ✅
+```
+
+**Abrir el túnel** (ejecutar en tu máquina local, mantener la terminal abierta):
+```bash
+gcloud compute ssh citypulse-airflow \
+  --zone=us-central1-a \
+  --project=PROJECT_ID \
+  --ssh-flag="-L 8080:localhost:8080" \
+  --ssh-flag="-N"
+```
+
+**Acceder a la UI:**
+```
+http://localhost:8080
+```
+
+Credenciales: `admin` / `admin`
+
+> El túnel solo es necesario para ver la UI. Los DAGs se ejecutan
+> automáticamente en la VM aunque no tengas el túnel abierto.
+
+---
+
 ## CI/CD
 
 El pipeline de GitHub Actions gestiona el despliegue automático de infraestructura.
@@ -381,7 +517,6 @@ El pipeline de GitHub Actions gestiona el despliegue automático de infraestruct
 | Push a `main` | Ejecuta `terraform apply` y despliega los cambios en GCP |
 
 El pipeline **solo se activa** si hay cambios dentro de `infrastructure/terraform/`.
-Cambios en extractores, DAGs o modelos DBT no disparan un despliegue de infraestructura.
 
 ---
 
@@ -391,7 +526,7 @@ Cambios en extractores, DAGs o modelos DBT no disparan un despliegue de infraest
 |------|-------------|--------|
 | **1. Infraestructura** | Terraform, GCP, Service Account, CI/CD | ✅ Completada |
 | **2. Ingesta** | Extractores Python, GCS Bronze | ✅ Completada |
-| **3. Orquestación** | Airflow DAGs, scheduling automático | 🔄 En progreso |
+| **3. Orquestación** | Airflow en GCP VM, DAGs automáticos | 🔄 En progreso |
 | **4. Procesamiento** | Transformaciones Silver layer | ⏳ Pendiente |
 | **5. Warehouse** | Carga a BigQuery Staging | ⏳ Pendiente |
 | **6. Transformación** | Modelos DBT Gold layer | ⏳ Pendiente |
