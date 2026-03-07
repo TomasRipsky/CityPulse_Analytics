@@ -1,12 +1,13 @@
 """
-DAG de ingesta y procesamiento diario — Clima y Calidad del Aire.
+DAG de ingesta, procesamiento y carga diario — Clima y Calidad del Aire.
 
 Ejecuta cada día a las 6:00 AM UTC:
 1. Extrae datos de las APIs (Bronze)
 2. Procesa y limpia los datos (Silver)
+3. Carga a BigQuery Staging
 
 Las dos fuentes corren en paralelo entre sí pero cada una
-respeta el orden extracción → procesamiento.
+respeta el orden extracción → procesamiento → carga.
 """
 
 from datetime import datetime, timedelta
@@ -21,12 +22,12 @@ default_args = {
     "email_on_failure": False,
 }
 
-REPO_PATH = "/home/usuario/citypulse_analytics"
-BUCKET    = "city-pulse-tr"
+REPO_PATH  = "/home/usuario/citypulse_analytics"
+BUCKET     = "city-pulse-tr"
+PROJECT_ID = "project-6c4733db-2f24-496d-90f"
 
 
 def _sync_repo():
-    """Actualiza el repositorio antes de ejecutar cualquier tarea."""
     import subprocess
     subprocess.run(["git", "-C", REPO_PATH, "pull"], check=True)
 
@@ -66,6 +67,19 @@ def process_weather(**context):
     return uri
 
 
+def load_weather(**context):
+    import sys
+    sys.path.insert(0, REPO_PATH)
+
+    from loading.loaders.weather_loader import WeatherLoader
+
+    execution_date = context["logical_date"].date()
+    loader = WeatherLoader(project_id=PROJECT_ID, bucket_name=BUCKET)
+    rows = loader.load(loading_date=execution_date)
+    print(f"✅ BigQuery: {rows} rows loaded for {execution_date}")
+    return rows
+
+
 def extract_air_quality(**context):
     _sync_repo()
     import sys
@@ -101,21 +115,37 @@ def process_air_quality(**context):
     return uri
 
 
+def load_air_quality(**context):
+    import sys
+    sys.path.insert(0, REPO_PATH)
+
+    from loading.loaders.air_quality_loader import AirQualityLoader
+
+    execution_date = context["logical_date"].date()
+    loader = AirQualityLoader(project_id=PROJECT_ID, bucket_name=BUCKET)
+    rows = loader.load(loading_date=execution_date)
+    print(f"✅ BigQuery: {rows} rows loaded for {execution_date}")
+    return rows
+
+
 with DAG(
     dag_id="prod.daily_ingestion",
-    description="Ingesta y procesamiento diario de clima y calidad del aire para NYC",
+    description="Ingesta, procesamiento y carga diaria de clima y calidad del aire para NYC",
     default_args=default_args,
     start_date=datetime(2025, 1, 1),
     schedule_interval="0 6 * * *",
     catchup=False,
-    tags=["ingestion", "processing", "daily", "prod"],
+    tags=["ingestion", "processing", "loading", "daily", "prod"],
 ) as dag:
 
     t_extract_weather     = PythonOperator(task_id="extract_weather",     python_callable=extract_weather)
     t_process_weather     = PythonOperator(task_id="process_weather",     python_callable=process_weather)
+    t_load_weather        = PythonOperator(task_id="load_weather",        python_callable=load_weather)
+
     t_extract_air_quality = PythonOperator(task_id="extract_air_quality", python_callable=extract_air_quality)
     t_process_air_quality = PythonOperator(task_id="process_air_quality", python_callable=process_air_quality)
+    t_load_air_quality    = PythonOperator(task_id="load_air_quality",    python_callable=load_air_quality)
 
     # Cada fuente respeta su orden pero ambas corren en paralelo
-    t_extract_weather     >> t_process_weather
-    t_extract_air_quality >> t_process_air_quality
+    t_extract_weather     >> t_process_weather     >> t_load_weather
+    t_extract_air_quality >> t_process_air_quality >> t_load_air_quality

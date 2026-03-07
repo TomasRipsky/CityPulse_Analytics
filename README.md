@@ -16,9 +16,10 @@
 5. [Setup Inicial](#setup-inicial)
 6. [Ingesta de Datos](#ingesta-de-datos)
 7. [Procesamiento Silver](#procesamiento-silver)
-8. [Orquestación con Airflow](#orquestación-con-airflow)
-9. [CI/CD](#cicd)
-10. [Fases del Proyecto](#fases-del-proyecto)
+8. [Carga a BigQuery](#carga-a-bigquery)
+9. [Orquestación con Airflow](#orquestación-con-airflow)
+10. [CI/CD](#cicd)
+11. [Fases del Proyecto](#fases-del-proyecto)
 
 ---
 
@@ -35,21 +36,13 @@ de la industria que separa claramente cada etapa del ciclo de vida del dato.
                  [Airflow DAGs]
             GCP VM e2-micro — us-central1
                          │
-         ┌───────────────┴───────────────┐
-         │                               │
-         ▼                               ▼
-[GCS Bronze]                     [GCS Bronze]
- JSON / ZIP crudo                 JSON / ZIP crudo
-         │                               │
-         ▼                               ▼
-[GCS Silver]                     [GCS Silver]
- Parquet limpio                   Parquet limpio
-         │                               │
-         └───────────────┬───────────────┘
+              [GCS Bronze — JSON / ZIP crudo]
                          │
-               [BigQuery — Staging]
+              [GCS Silver — Parquet limpio]
                          │
-                [DBT — Data Marts]
+            [BigQuery Staging — tablas nativas]
+                         │
+                [DBT — Data Marts Gold]
                          │
               [Looker Studio — Dashboard]
 ```
@@ -60,12 +53,12 @@ de la industria que separa claramente cada etapa del ciclo de vida del dato.
 
 | Capa | Tecnología | Rol |
 |------|-----------|-----|
-| Lenguaje | Python 3.11 | Extractores, procesadores |
+| Lenguaje | Python 3.11 | Extractores, procesadores, loaders |
 | Orquestación | Apache Airflow 2.8.1 | Scheduling y dependencias |
 | Infraestructura Airflow | GCP VM e2-micro | Hosting gratuito 24/7 |
 | Data Lake | Google Cloud Storage | Capas Bronze y Silver |
 | Formato Silver | Apache Parquet | Columnar, comprimido, tipado |
-| Data Warehouse | BigQuery | Capa Gold y consultas analíticas |
+| Data Warehouse | BigQuery | Staging y Gold layer |
 | Transformaciones | DBT Core | Modelos y tests de calidad |
 | Infraestructura | Terraform | Infraestructura como código |
 | CI/CD | GitHub Actions | Despliegue automático a GCP |
@@ -101,10 +94,18 @@ citypulse-analytics/
 │   │   └── citibike_processor.py
 │   ├── loaders/gcs_silver_loader.py
 │   └── requirements.txt
+├── loading/
+│   ├── base_loader.py
+│   ├── run_weather.py, run_air_quality.py, run_citibike.py
+│   ├── loaders/
+│   │   ├── weather_loader.py
+│   │   ├── air_quality_loader.py
+│   │   └── citibike_loader.py
+│   └── requirements.txt
 ├── orchestration/dags/
 │   ├── daily_ingestion_dag.py
 │   └── monthly_ingestion_dag.py
-├── transformation/             # DBT (Fase 5)
+├── transformation/             # DBT (Fase 6)
 ├── .env                        # No se sube al repo
 └── README.md
 ```
@@ -249,7 +250,7 @@ gs://city-pulse-tr/bronze/
 
 ## Procesamiento Silver
 
-Los procesadores leen los datos crudos de GCS Bronze, los limpian,
+Los procesadores leen datos crudos de GCS Bronze, los limpian,
 tipan y escriben en GCS Silver en formato **Parquet**.
 
 ### ¿Por qué Parquet?
@@ -258,33 +259,15 @@ tipan y escriben en GCS Silver en formato **Parquet**.
 - **Tipos garantizados**: fechas son fechas, números son números
 - **Compatible** con BigQuery, Spark y cualquier motor analítico
 
-### Instalar dependencias
 ```bash
 pip install -r processing/requirements.txt
+
+python -m processing.run_weather     [--dry-run] [--date YYYY-MM-DD]
+python -m processing.run_air_quality [--dry-run] [--date YYYY-MM-DD]
+python -m processing.run_citibike    [--dry-run] [--year YYYY --month MM]
 ```
 
-### Ejecutar los procesadores
-Todos soportan `--dry-run` para validar sin escribir en GCS.
-
-**Clima:**
-```bash
-python -m processing.run_weather --dry-run --date 2026-03-06
-python -m processing.run_weather --date 2026-03-06
-```
-
-**Calidad del aire:**
-```bash
-python -m processing.run_air_quality --dry-run --date 2026-03-06
-python -m processing.run_air_quality --date 2026-03-06
-```
-
-**Citibike:**
-```bash
-python -m processing.run_citibike --dry-run --year 2025 --month 1
-python -m processing.run_citibike --year 2025 --month 1
-```
-
-### Transformaciones aplicadas en Silver
+### Transformaciones aplicadas
 
 | Fuente | Transformaciones |
 |--------|-----------------|
@@ -299,6 +282,42 @@ gs://city-pulse-tr/silver/
 ├── air_quality/year=YYYY/month=MM/day=DD/air_quality_YYYYMMDD.parquet
 └── citibike/year=YYYY/month=MM/citibike_YYYYMM.parquet
 ```
+
+---
+
+## Carga a BigQuery
+
+Los loaders leen los Parquet de GCS Silver y los cargan en
+BigQuery Staging usando la **carga nativa desde GCS** — BigQuery
+lee el Parquet directamente sin descargar nada a través de Python,
+lo que lo hace más rápido y eficiente.
+
+```bash
+pip install -r loading/requirements.txt
+
+python -m loading.run_weather     [--dry-run] [--date YYYY-MM-DD]
+python -m loading.run_air_quality [--dry-run] [--date YYYY-MM-DD]
+python -m loading.run_citibike    [--dry-run] [--year YYYY --month MM]
+```
+
+### Estrategia de carga
+
+| Fuente | Estrategia | Motivo |
+|--------|-----------|--------|
+| Weather | Append incremental (delete día + insert) | Datos diarios acumulativos |
+| Air Quality | Append incremental (delete día + insert) | Datos diarios acumulativos |
+| Citibike | Truncate mensual (delete mes + insert) | Archivo mensual completo |
+
+La estrategia de **delete + insert** garantiza **idempotencia**: si el pipeline
+falla y se reejcuta para la misma fecha, no se acumulan duplicados.
+
+### Tablas en BigQuery Staging
+
+| Tabla | Dataset | Descripción |
+|-------|---------|-------------|
+| `weather` | `citypulse_staging` | 24 filas/día — datos horarios de clima |
+| `air_quality` | `citypulse_staging` | 24 filas/día — datos horarios de calidad del aire |
+| `citibike` | `citypulse_staging` | 3-5M filas/mes — viajes en bicicleta |
 
 ---
 
@@ -325,7 +344,7 @@ sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-**Instalar Airflow:**
+**Instalar Airflow y dependencias:**
 ```bash
 sudo apt-get update -y && sudo apt-get install -y python3-pip python3-venv git
 python3 -m venv ~/airflow-env && source ~/airflow-env/bin/activate
@@ -333,6 +352,7 @@ pip install "apache-airflow==2.8.1" \
   --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.8.1/constraints-3.10.txt"
 pip install -r ~/citypulse_analytics/ingestion/requirements.txt
 pip install -r ~/citypulse_analytics/processing/requirements.txt
+pip install -r ~/citypulse_analytics/loading/requirements.txt
 ```
 
 **Inicializar y crear usuario:**
@@ -370,9 +390,6 @@ sudo systemctl daemon-reload && sudo systemctl enable airflow && sudo systemctl 
 ```
 
 ### Conectar la VM con GitHub (Deploy Key)
-
-GitHub eliminó la autenticación por usuario/contraseña en 2021.
-Las **Deploy Keys** son claves SSH vinculadas exclusivamente a un repositorio.
 
 ```bash
 ssh-keygen -t ed25519 -C "citypulse-airflow-vm" -f ~/.ssh/github_key -N ""
@@ -413,27 +430,17 @@ cp orchestration/dags/*.py ~/airflow/dags/prod/
 Los `dag_id` siguen la convención de prefijos:
 ```python
 dag_id="prod.daily_ingestion"   # producción
-dag_id="dev.mi_nuevo_dag"       # desarrollo
+dag_id="dev.mi_nuevo_dag"       # desarrollo — siempre con is_paused_upon_creation=True
 ```
 
 **Regla:** nunca editar archivos de `prod/` directamente en la VM.
 
 #### Ciclo de vida de un DAG nuevo
-
 ```
 1. Crear en VS Code (Remote SSH) → ~/airflow/dags/dev/mi_dag.py
 2. Airflow lo detecta en ~30 segundos
 3. Probar con Trigger manual desde la UI
 4. Cuando funciona → copiar al repo → PR → merge → mover a prod/
-```
-
-Todo DAG en `dev/` debe incluir:
-```python
-with DAG(
-    dag_id="dev.mi_nuevo_dag",
-    is_paused_upon_creation=True,
-    ...
-) as dag:
 ```
 
 #### Promover un DAG de dev a prod
@@ -446,11 +453,8 @@ gcloud compute scp \
 
 ### Conectar VS Code a la VM (Remote SSH)
 
-**Remote SSH** permite editar archivos en la VM directamente desde VS Code,
-ideal para iterar rápidamente en DAGs de desarrollo sin pasar por el ciclo de PR.
-
 ```bash
-# Una sola vez en tu máquina local — configura el acceso SSH a todas las VMs de GCP
+# Una sola vez en tu máquina local
 gcloud compute config-ssh --project=PROJECT_ID
 ```
 
@@ -460,8 +464,8 @@ Abre la carpeta `/home/usuario/airflow/dags` y edita directamente.
 
 ### Acceder a la UI de Airflow
 
-El puerto 8080 está bloqueado en redes domésticas. Usa el **túnel SSH**
-cada vez que quieras ver la UI — mantén la terminal abierta mientras la usas:
+El puerto 8080 está bloqueado en redes domésticas. Abre el túnel antes
+de acceder a la UI y mantenlo abierto mientras la usas:
 
 ```bash
 gcloud compute ssh citypulse-airflow \
@@ -472,12 +476,14 @@ gcloud compute ssh citypulse-airflow \
 
 Acceder a: `http://localhost:8080` — Credenciales: `admin` / `admin`
 
+> Los DAGs se ejecutan automáticamente aunque no tengas el túnel abierto.
+
 ### DAGs de producción
 
 | DAG | Schedule | Tareas |
 |-----|----------|--------|
-| `prod.daily_ingestion` | Cada día 6:00 AM UTC | extract_weather → process_weather / extract_air_quality → process_air_quality (en paralelo) |
-| `prod.monthly_ingestion` | Día 8 de cada mes 6:00 AM UTC | extract_citibike → process_citibike |
+| `prod.daily_ingestion` | Cada día 6:00 AM UTC | extract_weather → process_weather → load_weather / extract_air_quality → process_air_quality → load_air_quality (en paralelo) |
+| `prod.monthly_ingestion` | Día 8 de cada mes 6:00 AM UTC | extract_citibike → process_citibike → load_citibike |
 
 ---
 
@@ -500,7 +506,7 @@ Solo se activa con cambios en `infrastructure/terraform/`.
 | **2. Ingesta** | Extractores Python, GCS Bronze | ✅ Completada |
 | **3. Orquestación** | Airflow en GCP VM, DAGs automáticos | ✅ Completada |
 | **4. Procesamiento** | Transformaciones Silver, Parquet | ✅ Completada |
-| **5. Warehouse** | Carga a BigQuery Staging | ⏳ Pendiente |
+| **5. Warehouse** | Carga a BigQuery Staging | ✅ Completada |
 | **6. Transformación** | Modelos DBT Gold layer | ⏳ Pendiente |
 | **7. Visualización** | Dashboard en Looker Studio | ⏳ Pendiente |
 
