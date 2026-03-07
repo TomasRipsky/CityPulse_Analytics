@@ -85,7 +85,8 @@ citypulse-analytics/
 ├── orchestration/dags/
 │   ├── daily_ingestion_dag.py
 │   └── monthly_ingestion_dag.py
-├── transformation/             # DBT (Fase 4)
+├── processing/                 # Procesadores Silver (Fase 4)
+├── transformation/             # Modelos DBT (Fase 5)
 ├── .env                        # No se sube al repo
 └── README.md
 ```
@@ -158,7 +159,9 @@ Permisos que Terraform no puede otorgarse a sí mismo. Se configuran una única 
 
 ```bash
 # Acceso al bucket de estado de Terraform
-gsutil iam ch serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com:roles/storage.admin gs://BUCKET_NAME
+gsutil iam ch \
+  serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com:roles/storage.admin \
+  gs://BUCKET_NAME
 
 # Gestión de políticas IAM
 gcloud projects add-iam-policy-binding PROJECT_ID \
@@ -181,8 +184,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 ### 7. Workload Identity Federation
 
 Este proyecto usa **Workload Identity Federation** en lugar de claves JSON.
-Es la práctica recomendada por Google: GitHub Actions obtiene tokens efímeros
-de corta duración sin necesidad de gestionar ningún secreto.
+GitHub Actions obtiene tokens efímeros sin necesidad de gestionar secretos.
 
 ```
 Sin Workload Identity:
@@ -272,8 +274,8 @@ gratuita** en GCP y suficiente para este proyecto gracias al swap configurado.
 gcloud compute ssh citypulse-airflow --zone=us-central1-a --project=PROJECT_ID
 ```
 
-**Añadir swap** — La VM e2-micro tiene 1GB de RAM, insuficiente para Airflow solo.
-El swap reserva espacio en disco como memoria adicional para gestionar picos de uso:
+**Añadir swap** — La VM e2-micro tiene 1GB de RAM. El swap reserva espacio
+en disco como memoria adicional para que Airflow pueda arrancar sin problemas:
 ```bash
 sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
@@ -296,8 +298,7 @@ airflow users create --username admin --password admin \
   --firstname Tu --lastname Nombre --role Admin --email tu@email.com
 ```
 
-**Configurar como servicio systemd** — `systemd` garantiza que Airflow arranque
-automáticamente con la VM y se reinicie solo si falla:
+**Configurar como servicio systemd:**
 ```bash
 sudo nano /etc/systemd/system/airflow.service
 ```
@@ -326,32 +327,23 @@ sudo systemctl daemon-reload && sudo systemctl enable airflow && sudo systemctl 
 ### Conectar la VM con GitHub (Deploy Key)
 
 GitHub eliminó la autenticación por usuario/contraseña en 2021. La alternativa
-recomendada son las **Deploy Keys**: claves SSH vinculadas exclusivamente a un
-repositorio concreto, siguiendo el principio de mínimo privilegio — la VM puede
-leer el código del proyecto pero no tiene acceso a ningún otro repositorio.
-
-```
-Sin Deploy Key:
-VM → usuario/contraseña → GitHub  ❌ no soportado desde 2021
-
-Con Deploy Key:
-VM → clave SSH privada → GitHub verifica con clave pública → acceso al repo ✅
-```
+son las **Deploy Keys**: claves SSH vinculadas exclusivamente a un repositorio,
+siguiendo el principio de mínimo privilegio.
 
 ```bash
 # Generar la clave en la VM
 ssh-keygen -t ed25519 -C "citypulse-airflow-vm" -f ~/.ssh/github_key -N ""
 
-# Ver la clave pública — copiarla y añadirla en GitHub
+# Ver la clave pública y añadirla en GitHub
 # Settings → SSH and GPG keys → New SSH key
 cat ~/.ssh/github_key.pub
 
 # Configurar SSH para usar esa clave con GitHub
-cat >> ~/.ssh/config << 'EOF'
+cat >> ~/.ssh/config << 'SSHEOF'
 Host github.com
   IdentityFile ~/.ssh/github_key
   User git
-EOF
+SSHEOF
 
 # Verificar conexión
 ssh -T git@github.com
@@ -364,53 +356,114 @@ source ~/airflow-env/bin/activate
 pip install -r ~/citypulse_analytics/ingestion/requirements.txt
 ```
 
-### Desplegar los DAGs
-
-**Primera vez:**
-```bash
-mkdir -p ~/airflow/dags
-cp ~/citypulse_analytics/orchestration/dags/*.py ~/airflow/dags/
-```
-
-### Sincronización automática de DAGs
-
-Para que los cambios en los DAGs lleguen a Airflow automáticamente sin
-entrar a la VM, se puede configurar un cron job que sincroniza el repositorio, por ejemplo
-cada 5 minutos:
-
-```
-git push a main → cron job en VM (cada 5 min) → git pull + cp → Airflow recarga
-```
+### Desplegar los DAGs por primera vez
 
 ```bash
-crontab -e
-# Añadir al final:
-*/5 * * * * cd /home/usuario/citypulse_analytics && git pull && cp orchestration/dags/*.py /home/usuario/airflow/dags/
+mkdir -p ~/airflow/dags/prod
+mkdir -p ~/airflow/dags/dev
+cp ~/citypulse_analytics/orchestration/dags/*.py ~/airflow/dags/prod/
 ```
-(No se ha creado aun, no se percibe necesario aun debido a la simplicidad del proyecto)
 
-### DAGs disponibles
+### Flujo de trabajo: dev vs prod
 
-| DAG | Schedule | Descripción |
-|-----|----------|-------------|
-| `daily_ingestion` | Cada día a las 6:00 AM UTC | Clima y calidad del aire en paralelo |
-| `monthly_ingestion` | Día 8 de cada mes a las 6:00 AM UTC | Descarga Citibike con margen de publicación |
+Los DAGs están separados en dos entornos dentro de la VM para distinguir
+claramente entre DAGs estables y DAGs en desarrollo.
+
+```
+~/airflow/dags/
+├── prod/    ← DAGs mergeados via PR, estables, con schedule activo
+└── dev/     ← DAGs en desarrollo, experimentales, siempre pausados
+```
+
+Esta separación se refleja también en el `dag_id` de cada DAG:
+
+```python
+# DAG de producción — llega via PR y merge a main
+dag_id="prod.daily_ingestion"
+
+# DAG en desarrollo — creado directamente en la VM para iterar rápido
+dag_id="dev.mi_nuevo_dag"
+```
+
+**Regla fundamental:** nunca editar archivos de `prod/` directamente en la VM.
+Solo `dev/` es para experimentar. Cuando un DAG está listo, pasa por el repo.
+
+#### Flujo de desarrollo de un DAG nuevo
+
+```
+1. Crear el DAG en VS Code (Remote SSH) → ~/airflow/dags/dev/mi_dag.py
+2. Airflow lo detecta automáticamente en ~30 segundos
+3. Probar desde la UI con Trigger manual
+4. Cuando funciona → copiar al repo local → PR → merge → mover a prod/
+```
+
+Todo DAG en `dev/` debe incluir `is_paused_upon_creation=True` para que
+no se ejecute automáticamente por accidente:
+
+```python
+with DAG(
+    dag_id="dev.mi_nuevo_dag",
+    is_paused_upon_creation=True,
+    ...
+) as dag:
+```
+
+#### Promover un DAG de dev a prod
+
+Una vez el DAG está validado en la VM, sincronizarlo con el repo:
+
+```bash
+# Desde tu máquina local — descarga el DAG de la VM
+gcloud compute scp \
+  citypulse-airflow:/home/usuario/airflow/dags/dev/mi_dag.py \
+  ./orchestration/dags/mi_dag.py \
+  --zone=us-central1-a
+
+# Flujo habitual
+git checkout -b feat/add-mi-dag
+git add orchestration/dags/mi_dag.py
+git commit -m "feat: add mi_dag to production"
+git push origin feat/add-mi-dag
+# → PR → merge → copiar a prod/ en la VM
+```
+
+### Conectar VS Code a la VM (Remote SSH)
+
+**Remote SSH** es una extensión de VS Code que permite editar archivos
+directamente en la VM como si fueran locales. Es la herramienta principal
+para desarrollar DAGs en el entorno `dev/` sin pasar por el ciclo completo
+de PR cada vez.
+
+**Instalación:**
+1. Instalar la extensión **Remote - SSH** en VS Code
+2. Ejecutar este comando una única vez en tu máquina local para configurar
+   automáticamente el acceso SSH a todas tus VMs de GCP:
+```bash
+gcloud compute config-ssh --project=PROJECT_ID
+```
+3. En VS Code: `Ctrl+Shift+P` → `Remote-SSH: Connect to Host` → `citypulse-airflow`
+4. Abrir carpeta: `/home/usuario/airflow/dags`
+
+A partir de ahí cualquier archivo que crees o edites en VS Code se guarda
+directamente en la VM y Airflow lo detecta en ~30 segundos.
 
 ### Acceder a la UI de Airflow
 
-El puerto 8080 está bloqueado en redes domésticas por el ISP. La solución
-es un **túnel SSH**: redirige el puerto de la VM a tu máquina local a través
-de SSH (puerto 22), que siempre está abierto.
+El puerto 8080 está bloqueado en redes domésticas. La solución es un
+**túnel SSH** que redirige el tráfico a través del puerto 22.
 
 ```
 Sin túnel: navegador → internet → puerto 8080 VM  ❌ bloqueado por ISP
 Con túnel: navegador → localhost:8080 → SSH → VM → Airflow ✅
 ```
 
+**Cada vez que quieras acceder a la UI**, abre este comando en una terminal
+de tu máquina local y mantenla abierta mientras usas Airflow:
+
 ```bash
-# Abrir el túnel (mantener la terminal abierta)
 gcloud compute ssh citypulse-airflow \
-  --zone=us-central1-a --project=PROJECT_ID \
+  --zone=us-central1-a \
+  --project=PROJECT_ID \
   --ssh-flag="-L 8080:localhost:8080" \
   --ssh-flag="-N"
 ```
@@ -419,6 +472,13 @@ Acceder a: `http://localhost:8080` — Credenciales: `admin` / `admin`
 
 > Los DAGs se ejecutan automáticamente aunque no tengas el túnel abierto.
 > El túnel solo es necesario para ver la UI.
+
+### DAGs de producción
+
+| DAG | Schedule | Descripción |
+|-----|----------|-------------|
+| `prod.daily_ingestion` | Cada día a las 6:00 AM UTC | Clima y calidad del aire en paralelo |
+| `prod.monthly_ingestion` | Día 8 de cada mes a las 6:00 AM UTC | Descarga Citibike |
 
 ---
 
