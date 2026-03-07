@@ -93,7 +93,7 @@ def extract_air_quality(**context):
 # ─────────────────────────────────────────────
 
 with DAG(
-    dag_id="daily_ingestion",
+    dag_id="prod.daily_ingestion",
     description="Ingesta diaria de clima y calidad del aire para NYC",
     default_args=default_args,
     start_date=datetime(2025, 1, 1),
