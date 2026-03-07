@@ -1,12 +1,12 @@
 """
-DAG de ingesta diaria — Clima y Calidad del Aire.
+DAG de ingesta y procesamiento diario — Clima y Calidad del Aire.
 
-Ejecuta cada día a las 6:00 AM UTC los extractores de
-Open-Meteo Forecast y Open-Meteo Air Quality para NYC.
+Ejecuta cada día a las 6:00 AM UTC:
+1. Extrae datos de las APIs (Bronze)
+2. Procesa y limpia los datos (Silver)
 
-Las tareas corren en paralelo ya que son independientes entre sí.
-Si una falla, la otra continúa y Airflow reintenta la fallida
-automáticamente según la política de reintentos definida.
+Las dos fuentes corren en paralelo entre sí pero cada una
+respeta el orden extracción → procesamiento.
 """
 
 from datetime import datetime, timedelta
@@ -14,9 +14,6 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-# Argumentos por defecto aplicados a todas las tareas del DAG.
-# retries=2 significa que si una tarea falla, Airflow la reintenta
-# hasta 2 veces con 5 minutos de espera entre intentos.
 default_args = {
     "owner": "citypulse",
     "retries": 2,
@@ -24,93 +21,101 @@ default_args = {
     "email_on_failure": False,
 }
 
-# ─────────────────────────────────────────────
-# Funciones de cada tarea
-# Importamos los extractores dentro de la función para evitar
-# problemas de importación al parsear el DAG.
-# ─────────────────────────────────────────────
+REPO_PATH = "/home/usuario/citypulse_analytics"
+BUCKET    = "city-pulse-tr"
+
+
+def _sync_repo():
+    """Actualiza el repositorio antes de ejecutar cualquier tarea."""
+    import subprocess
+    subprocess.run(["git", "-C", REPO_PATH, "pull"], check=True)
+
 
 def extract_weather(**context):
-    """Extrae datos de clima para la fecha de ejecución del DAG."""
+    _sync_repo()
     import sys
-    sys.path.insert(0, "/home/usuario/citypulse_analytics")
-
-    from datetime import date
-    import subprocess
-    subprocess.run(
-        ["git", "-C", "/home/usuario/citypulse_analytics", "pull"],
-        check=True
-    )
+    sys.path.insert(0, REPO_PATH)
 
     from ingestion.extractors.weather_extractor import WeatherExtractor
     from ingestion.loaders.gcs_loader import GCSLoader
-    import os
 
-    # logical_date es la fecha de ejecución lógica del DAG.
-    # Para el DAG de ayer ejecutado hoy, logical_date = ayer.
     execution_date = context["logical_date"].date()
-
     extractor = WeatherExtractor()
     data = extractor.extract(execution_date)
 
-    loader = GCSLoader(bucket_name=os.environ.get("GCP_BUCKET_NAME", "city-pulse-tr"))
+    loader = GCSLoader(bucket_name=BUCKET)
     uri = loader.load(data=data, source_name=extractor.source_name, extraction_date=execution_date)
+    print(f"✅ Bronze: {uri}")
+    return uri
 
-    print(f"✅ Weather data uploaded to: {uri}")
+
+def process_weather(**context):
+    import sys
+    sys.path.insert(0, REPO_PATH)
+
+    from processing.processors.weather_processor import WeatherProcessor
+    from processing.loaders.gcs_silver_loader import GCSSilverLoader
+
+    execution_date = context["logical_date"].date()
+    processor = WeatherProcessor(bucket_name=BUCKET)
+    df = processor.process(execution_date)
+
+    loader = GCSSilverLoader(bucket_name=BUCKET)
+    uri = loader.load(df=df, source_name=processor.source_name, processing_date=execution_date)
+    print(f"✅ Silver: {uri} ({len(df)} rows)")
     return uri
 
 
 def extract_air_quality(**context):
-    """Extrae datos de calidad del aire para la fecha de ejecución del DAG."""
+    _sync_repo()
     import sys
-    sys.path.insert(0, "/home/usuario/citypulse_analytics")
-
-    from datetime import date
-    import subprocess
-    subprocess.run(
-        ["git", "-C", "/home/usuario/citypulse_analytics", "pull"],
-        check=True
-    )
+    sys.path.insert(0, REPO_PATH)
 
     from ingestion.extractors.air_quality_extractor import AirQualityExtractor
     from ingestion.loaders.gcs_loader import GCSLoader
-    import os
 
     execution_date = context["logical_date"].date()
-
     extractor = AirQualityExtractor()
     data = extractor.extract(execution_date)
 
-    loader = GCSLoader(bucket_name=os.environ.get("GCP_BUCKET_NAME", "city-pulse-tr"))
+    loader = GCSLoader(bucket_name=BUCKET)
     uri = loader.load(data=data, source_name=extractor.source_name, extraction_date=execution_date)
-
-    print(f"✅ Air quality data uploaded to: {uri}")
+    print(f"✅ Bronze: {uri}")
     return uri
 
 
-# ─────────────────────────────────────────────
-# Definición del DAG
-# ─────────────────────────────────────────────
+def process_air_quality(**context):
+    import sys
+    sys.path.insert(0, REPO_PATH)
+
+    from processing.processors.air_quality_processor import AirQualityProcessor
+    from processing.loaders.gcs_silver_loader import GCSSilverLoader
+
+    execution_date = context["logical_date"].date()
+    processor = AirQualityProcessor(bucket_name=BUCKET)
+    df = processor.process(execution_date)
+
+    loader = GCSSilverLoader(bucket_name=BUCKET)
+    uri = loader.load(df=df, source_name=processor.source_name, processing_date=execution_date)
+    print(f"✅ Silver: {uri} ({len(df)} rows)")
+    return uri
+
 
 with DAG(
     dag_id="prod.daily_ingestion",
-    description="Ingesta diaria de clima y calidad del aire para NYC",
+    description="Ingesta y procesamiento diario de clima y calidad del aire para NYC",
     default_args=default_args,
     start_date=datetime(2025, 1, 1),
-    schedule_interval="0 6 * * *",  # Cada día a las 6:00 AM UTC
-    catchup=False,                  # No ejecutar fechas pasadas al activar el DAG
-    tags=["ingestion", "daily", "weather", "air_quality"],
+    schedule_interval="0 6 * * *",
+    catchup=False,
+    tags=["ingestion", "processing", "daily", "prod"],
 ) as dag:
 
-    weather_task = PythonOperator(
-        task_id="extract_weather",
-        python_callable=extract_weather,
-    )
+    t_extract_weather     = PythonOperator(task_id="extract_weather",     python_callable=extract_weather)
+    t_process_weather     = PythonOperator(task_id="process_weather",     python_callable=process_weather)
+    t_extract_air_quality = PythonOperator(task_id="extract_air_quality", python_callable=extract_air_quality)
+    t_process_air_quality = PythonOperator(task_id="process_air_quality", python_callable=process_air_quality)
 
-    air_quality_task = PythonOperator(
-        task_id="extract_air_quality",
-        python_callable=extract_air_quality,
-    )
-
-    # Las dos tareas corren en paralelo — no hay dependencia entre ellas
-    [weather_task, air_quality_task]
+    # Cada fuente respeta su orden pero ambas corren en paralelo
+    t_extract_weather     >> t_process_weather
+    t_extract_air_quality >> t_process_air_quality

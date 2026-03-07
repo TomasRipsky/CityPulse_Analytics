@@ -1,12 +1,9 @@
 """
-DAG de ingesta mensual — Citibike NYC Trip Data.
+DAG de ingesta y procesamiento mensual — Citibike NYC.
 
-Se ejecuta el día 8 de cada mes para descargar los datos
-del mes anterior desde el S3 público de Citibike.
-
-Usamos el día 8 como margen de seguridad: Citibike publica
-los datos con un retraso de 4-6 semanas, por lo que en el
-día 8 del mes N tenemos garantizados los datos del mes N-2.
+Se ejecuta el día 8 de cada mes:
+1. Descarga el ZIP mensual de Citibike desde S3 (Bronze)
+2. Descomprime, limpia y tipea los datos (Silver)
 """
 
 from datetime import datetime, timedelta
@@ -16,69 +13,77 @@ from airflow.operators.python import PythonOperator
 
 default_args = {
     "owner": "citypulse",
-    "retries": 3,                       # Más reintentos por el tamaño del archivo
+    "retries": 3,
     "retry_delay": timedelta(minutes=10),
     "email_on_failure": False,
 }
 
+REPO_PATH = "/home/usuario/citypulse_analytics"
+BUCKET    = "city-pulse-tr"
+
+
+def _sync_repo():
+    import subprocess
+    subprocess.run(["git", "-C", REPO_PATH, "pull"], check=True)
+
+
+def _target_month(execution_date):
+    """Calcula el mes objetivo: 2 meses antes de la ejecución."""
+    month_offset = execution_date.month - 2
+    if month_offset <= 0:
+        return execution_date.year - 1, 12 + month_offset
+    return execution_date.year, month_offset
+
 
 def extract_citibike(**context):
-    """
-    Descarga datos de Citibike para 2 meses antes de la fecha de ejecución.
-    Ejemplo: si el DAG corre en marzo 2026, descarga enero 2026.
-    """
+    _sync_repo()
     import sys
-    import subprocess
-    sys.path.insert(0, "/home/usuario/citypulse_analytics")
-
-    subprocess.run(
-        ["git", "-C", "/home/usuario/citypulse_analytics", "pull"],
-        check=True
-    )
+    sys.path.insert(0, REPO_PATH)
 
     from ingestion.extractors.citibike_extractor import CitibikeExtractor
     from ingestion.loaders.gcs_loader import GCSLoader
-    import os
 
-    # Calculamos el mes objetivo: 2 meses antes de la ejecución
-    execution_date = context["logical_date"]
-    month_offset = execution_date.month - 2
-    if month_offset <= 0:
-        target_year = execution_date.year - 1
-        target_month = 12 + month_offset
-    else:
-        target_year = execution_date.year
-        target_month = month_offset
-
-    print(f"Downloading Citibike data for {target_year}-{target_month:02d}")
+    year, month = _target_month(context["logical_date"])
+    print(f"Extracting Citibike data for {year}-{month:02d}")
 
     extractor = CitibikeExtractor()
-    content, filename = extractor.extract(year=target_year, month=target_month)
+    content, filename = extractor.extract(year=year, month=month)
 
-    loader = GCSLoader(bucket_name=os.environ.get("GCP_BUCKET_NAME", "city-pulse-tr"))
-    uri = loader.load_bytes(
-        content=content,
-        source_name=extractor.source_name,
-        year=target_year,
-        month=target_month,
-        filename=filename,
-    )
+    loader = GCSLoader(bucket_name=BUCKET)
+    uri = loader.load_bytes(content=content, source_name=extractor.source_name, year=year, month=month, filename=filename)
+    print(f"✅ Bronze: {uri}")
+    return uri
 
-    print(f"✅ Citibike data uploaded to: {uri}")
+
+def process_citibike(**context):
+    import sys
+    sys.path.insert(0, REPO_PATH)
+
+    from processing.processors.citibike_processor import CitibikeProcessor
+    from processing.loaders.gcs_silver_loader import GCSSilverLoader
+
+    year, month = _target_month(context["logical_date"])
+
+    processor = CitibikeProcessor(bucket_name=BUCKET)
+    df = processor.process_month(year=year, month=month)
+
+    loader = GCSSilverLoader(bucket_name=BUCKET)
+    uri = loader.load_monthly(df=df, source_name=processor.source_name, year=year, month=month)
+    print(f"✅ Silver: {uri} ({len(df)} rows)")
     return uri
 
 
 with DAG(
     dag_id="prod.monthly_ingestion",
-    description="Ingesta mensual de datos de Citibike NYC",
+    description="Ingesta y procesamiento mensual de Citibike NYC",
     default_args=default_args,
     start_date=datetime(2025, 1, 1),
-    schedule_interval="0 6 8 * *",  # Día 8 de cada mes a las 6:00 AM UTC
+    schedule_interval="0 6 8 * *",
     catchup=False,
-    tags=["ingestion", "monthly", "citibike"],
+    tags=["ingestion", "processing", "monthly", "prod"],
 ) as dag:
 
-    citibike_task = PythonOperator(
-        task_id="extract_citibike",
-        python_callable=extract_citibike,
-    )
+    t_extract = PythonOperator(task_id="extract_citibike", python_callable=extract_citibike)
+    t_process = PythonOperator(task_id="process_citibike", python_callable=process_citibike)
+
+    t_extract >> t_process
