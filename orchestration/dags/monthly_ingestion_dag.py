@@ -1,9 +1,10 @@
 """
-DAG de ingesta y procesamiento mensual — Citibike NYC.
+DAG de ingesta, procesamiento y carga mensual — Citibike NYC.
 
-Se ejecuta el día 8 de cada mes:
+Se ejecuta el día 8 de cada mes a las 6:00 AM UTC:
 1. Descarga el ZIP mensual de Citibike desde S3 (Bronze)
 2. Descomprime, limpia y tipea los datos (Silver)
+3. Carga a BigQuery Staging
 """
 
 from datetime import datetime, timedelta
@@ -18,8 +19,9 @@ default_args = {
     "email_on_failure": False,
 }
 
-REPO_PATH = "/home/usuario/citypulse_analytics"
-BUCKET    = "city-pulse-tr"
+REPO_PATH  = "/home/usuario/citypulse_analytics"
+BUCKET     = "city-pulse-tr"
+PROJECT_ID = "project-6c4733db-2f24-496d-90f"
 
 
 def _sync_repo():
@@ -73,17 +75,31 @@ def process_citibike(**context):
     return uri
 
 
+def load_citibike(**context):
+    import sys
+    sys.path.insert(0, REPO_PATH)
+
+    from loading.loaders.citibike_loader import CitibikeLoader
+
+    year, month = _target_month(context["logical_date"])
+    loader = CitibikeLoader(project_id=PROJECT_ID, bucket_name=BUCKET)
+    rows = loader.load(year=year, month=month)
+    print(f"✅ BigQuery: {rows} rows loaded for {year}-{month:02d}")
+    return rows
+
+
 with DAG(
     dag_id="prod.monthly_ingestion",
-    description="Ingesta y procesamiento mensual de Citibike NYC",
+    description="Ingesta, procesamiento y carga mensual de Citibike NYC",
     default_args=default_args,
     start_date=datetime(2025, 1, 1),
     schedule_interval="0 6 8 * *",
     catchup=False,
-    tags=["ingestion", "processing", "monthly", "prod"],
+    tags=["ingestion", "processing", "loading", "monthly", "prod"],
 ) as dag:
 
     t_extract = PythonOperator(task_id="extract_citibike", python_callable=extract_citibike)
     t_process = PythonOperator(task_id="process_citibike", python_callable=process_citibike)
+    t_load    = PythonOperator(task_id="load_citibike",    python_callable=load_citibike)
 
-    t_extract >> t_process
+    t_extract >> t_process >> t_load
