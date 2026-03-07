@@ -16,6 +16,8 @@ from datetime import date
 from io import BytesIO
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from google.cloud import storage
 
 logger = logging.getLogger(__name__)
@@ -35,42 +37,40 @@ class GCSSilverLoader:
         self.bucket = self.client.bucket(bucket_name)
 
     def load(self, df: pd.DataFrame, source_name: str, processing_date: date) -> str:
-        """
-        Serializa el DataFrame a Parquet y lo sube a GCS Silver.
-        Devuelve la URI completa del archivo subido.
-        """
         gcs_path = self._build_path(source_name, processing_date)
-
-        # Serializamos a Parquet en memoria — no necesitamos escribir
-        # en disco local, lo subimos directamente desde RAM a GCS.
-        buffer = BytesIO()
-        df.to_parquet(buffer, index=False, engine="pyarrow", compression="snappy")
-        buffer.seek(0)
-
-        blob = self.bucket.blob(gcs_path)
-        blob.upload_from_file(buffer, content_type="application/octet-stream")
-
+        self._upload(df, gcs_path)
         full_uri = f"gs://{self.bucket_name}/{gcs_path}"
         logger.info(f"Uploaded {len(df)} rows to {full_uri}")
         return full_uri
 
     def load_monthly(self, df: pd.DataFrame, source_name: str, year: int, month: int) -> str:
-        """
-        Versión mensual del loader para Citibike.
-        No tiene partición por día porque los datos son mensuales.
-        """
         gcs_path = f"silver/{source_name}/year={year}/month={month:02d}/{source_name}_{year}{month:02d}.parquet"
+        self._upload(df, gcs_path)
+        full_uri = f"gs://{self.bucket_name}/{gcs_path}"
+        logger.info(f"Uploaded {len(df)} rows to {full_uri}")
+        return full_uri
 
+    def _upload(self, df: pd.DataFrame, gcs_path: str):
+        """
+        Convierte el DataFrame a PyArrow con timestamps en microsegundos
+        y lo sube a GCS.
+
+        BigQuery requiere timestamps en microsegundos (us). Pandas por defecto
+        usa nanosegundos (ns), que BigQuery no puede leer como TIMESTAMP y
+        los almacena como INT64. Forzamos la conversión a us antes de escribir.
+        """
+        # Convertimos columnas timestamp de ns a us para compatibilidad con BigQuery
+        df = df.copy()
+        for col in df.select_dtypes(include=["datetime64[ns, UTC]", "datetime64[ns]"]).columns:
+            df[col] = df[col].astype("datetime64[us, UTC]")
+
+        table = pa.Table.from_pandas(df, preserve_index=False)
         buffer = BytesIO()
-        df.to_parquet(buffer, index=False, engine="pyarrow", compression="snappy")
+        pq.write_table(table, buffer, compression="snappy")
         buffer.seek(0)
 
         blob = self.bucket.blob(gcs_path)
         blob.upload_from_file(buffer, content_type="application/octet-stream")
-
-        full_uri = f"gs://{self.bucket_name}/{gcs_path}"
-        logger.info(f"Uploaded {len(df)} rows to {full_uri}")
-        return full_uri
 
     def _build_path(self, source_name: str, processing_date: date) -> str:
         return (

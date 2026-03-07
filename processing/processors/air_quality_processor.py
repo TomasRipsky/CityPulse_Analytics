@@ -1,8 +1,5 @@
 """
 Air quality processor — transforma datos crudos de calidad del aire a Silver.
-
-Mismo patrón que el weather processor: arrays horarios paralelos
-que aplanamos a un DataFrame tabular con una fila por hora.
 """
 
 from datetime import date
@@ -27,7 +24,7 @@ class AirQualityProcessor(BaseProcessor):
         hourly = raw["hourly"]
 
         df = pd.DataFrame({
-            "timestamp": pd.to_datetime(hourly["time"]),
+            "timestamp": pd.to_datetime(hourly["time"], utc=True),
             "pm2_5":     pd.array(hourly["pm2_5"],   dtype="Float64"),
             "pm10":      pd.array(hourly["pm10"],     dtype="Float64"),
             "ozone":     pd.array(hourly["ozone"],    dtype="Float64"),
@@ -36,9 +33,6 @@ class AirQualityProcessor(BaseProcessor):
 
         df["date"]     = processing_date
         df["location"] = "NYC"
-
-        # Añadimos una categoría de calidad del aire basada en el AQI de la EPA.
-        # Esto enriquece el dato en Silver y evita repetir esta lógica en DBT.
         df["aqi_category"] = df["us_aqi"].map(self._aqi_category)
 
         self.logger.info(f"Air quality processed: {len(df)} rows for {processing_date}")
@@ -46,7 +40,6 @@ class AirQualityProcessor(BaseProcessor):
 
     @staticmethod
     def _aqi_category(aqi) -> str:
-        """Clasifica el AQI según la escala estándar de la EPA de Estados Unidos."""
         if pd.isna(aqi):
             return "Unknown"
         aqi = int(aqi)

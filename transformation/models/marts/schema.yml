@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: daily_weather_summary
+    description: "Resumen diario de clima para NYC — una fila por día"
+    columns:
+      - name: date
+        description: "Fecha del resumen"
+        tests:
+          - not_null
+          - unique
+      - name: temp_avg_c
+        tests:
+          - not_null
+      - name: precipitation_total_mm
+        tests:
+          - not_null
+
+  - name: daily_air_quality_summary
+    description: "Resumen diario de calidad del aire para NYC — una fila por día"
+    columns:
+      - name: date
+        description: "Fecha del resumen"
+        tests:
+          - not_null
+          - unique
+      - name: aqi_avg
+        tests:
+          - not_null
+      - name: aqi_dominant_category
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - "Good"
+                - "Moderate"
+                - "Unhealthy for Sensitive Groups"
+                - "Unhealthy"
+                - "Very Unhealthy"
+                - "Hazardous"
+                - "Unknown"
+
+  - name: daily_mobility_summary
+    description: "Resumen diario de movilidad Citibike NYC — una fila por día"
+    columns:
+      - name: date
+        description: "Fecha del resumen"
+        tests:
+          - not_null
+          - unique
+      - name: total_rides
+        tests:
+          - not_null
+      - name: member_casual
+        tests:
+          - accepted_values:
+              values:
+                - "member"
+                - "casual"

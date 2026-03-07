@@ -1,0 +1,23 @@
+name: "citypulse"
+version: "1.0.0"
+config-version: 2
+
+profile: "citypulse"
+
+model-paths: ["models"]
+test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  citypulse:
+    staging:
+      +materialized: view        # staging son vistas — ligeras, sin coste de almacenamiento
+      +schema: citypulse_staging # leen de citypulse_staging
+    marts:
+      +materialized: table       # marts son tablas — persistidas, rápidas para Looker
+      +schema: citypulse_marts   # escriben en citypulse_marts

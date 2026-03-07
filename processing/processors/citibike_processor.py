@@ -75,8 +75,8 @@ class CitibikeProcessor(BaseProcessor):
                 )
 
         # Tipado de fechas y coordenadas
-        df["started_at"] = pd.to_datetime(df["started_at"], errors="coerce")
-        df["ended_at"]   = pd.to_datetime(df["ended_at"],   errors="coerce")
+        df["started_at"] = pd.to_datetime(df["started_at"], errors="coerce", utc=True)
+        df["ended_at"]   = pd.to_datetime(df["ended_at"],   errors="coerce", utc=True)
         df["start_lat"]  = pd.to_numeric(df["start_lat"], errors="coerce")
         df["start_lng"]  = pd.to_numeric(df["start_lng"], errors="coerce")
         df["end_lat"]    = pd.to_numeric(df["end_lat"],   errors="coerce")
