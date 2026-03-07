@@ -15,9 +15,10 @@
 4. [Fuentes de Datos](#fuentes-de-datos)
 5. [Setup Inicial](#setup-inicial)
 6. [Ingesta de Datos](#ingesta-de-datos)
-7. [Orquestación con Airflow](#orquestación-con-airflow)
-8. [CI/CD](#cicd)
-9. [Fases del Proyecto](#fases-del-proyecto)
+7. [Procesamiento Silver](#procesamiento-silver)
+8. [Orquestación con Airflow](#orquestación-con-airflow)
+9. [CI/CD](#cicd)
+10. [Fases del Proyecto](#fases-del-proyecto)
 
 ---
 
@@ -34,9 +35,17 @@ de la industria que separa claramente cada etapa del ciclo de vida del dato.
                  [Airflow DAGs]
             GCP VM e2-micro — us-central1
                          │
-              [GCS Bronze — datos crudos]
-                         │
-              [GCS Silver — datos limpios]
+         ┌───────────────┴───────────────┐
+         │                               │
+         ▼                               ▼
+[GCS Bronze]                     [GCS Bronze]
+ JSON / ZIP crudo                 JSON / ZIP crudo
+         │                               │
+         ▼                               ▼
+[GCS Silver]                     [GCS Silver]
+ Parquet limpio                   Parquet limpio
+         │                               │
+         └───────────────┬───────────────┘
                          │
                [BigQuery — Staging]
                          │
@@ -51,10 +60,11 @@ de la industria que separa claramente cada etapa del ciclo de vida del dato.
 
 | Capa | Tecnología | Rol |
 |------|-----------|-----|
-| Lenguaje | Python 3.11 | Extractores e ingesta |
+| Lenguaje | Python 3.11 | Extractores, procesadores |
 | Orquestación | Apache Airflow 2.8.1 | Scheduling y dependencias |
 | Infraestructura Airflow | GCP VM e2-micro | Hosting gratuito 24/7 |
 | Data Lake | Google Cloud Storage | Capas Bronze y Silver |
+| Formato Silver | Apache Parquet | Columnar, comprimido, tipado |
 | Data Warehouse | BigQuery | Capa Gold y consultas analíticas |
 | Transformaciones | DBT Core | Modelos y tests de calidad |
 | Infraestructura | Terraform | Infraestructura como código |
@@ -82,11 +92,19 @@ citypulse-analytics/
 │   │   └── citibike_extractor.py
 │   ├── loaders/gcs_loader.py
 │   └── requirements.txt
+├── processing/
+│   ├── base_processor.py
+│   ├── run_weather.py, run_air_quality.py, run_citibike.py
+│   ├── processors/
+│   │   ├── weather_processor.py
+│   │   ├── air_quality_processor.py
+│   │   └── citibike_processor.py
+│   ├── loaders/gcs_silver_loader.py
+│   └── requirements.txt
 ├── orchestration/dags/
 │   ├── daily_ingestion_dag.py
 │   └── monthly_ingestion_dag.py
-├── processing/                 # Procesadores Silver (Fase 4)
-├── transformation/             # Modelos DBT (Fase 5)
+├── transformation/             # DBT (Fase 5)
 ├── .env                        # No se sube al repo
 └── README.md
 ```
@@ -97,20 +115,16 @@ citypulse-analytics/
 
 ### Open-Meteo Forecast
 - **Qué provee**: temperatura, precipitación, viento y humedad horarios para NYC
-- **Autenticación**: ninguna — sin API key
-- **Frecuencia**: diaria
+- **Autenticación**: ninguna — sin API key / **Frecuencia**: diaria
 
 ### Open-Meteo Air Quality
 - **Qué provee**: PM2.5, PM10, ozono e índice AQI horarios
-- **Autenticación**: ninguna — sin API key
-- **Frecuencia**: diaria
+- **Autenticación**: ninguna — sin API key / **Frecuencia**: diaria
 
 ### Citibike NYC Trip Data
-- **Qué provee**: viajes en bicicleta de NYC — origen, destino, duración, tipo de usuario
+- **Qué provee**: viajes en bicicleta — origen, destino, duración, tipo de usuario
 - **Formato**: CSV comprimido en ZIP, S3 público de AWS
-- **Frecuencia**: mensual (~6 semanas de retraso)
-- **Volumen**: 3-5 millones de viajes/mes, 100-800MB por archivo
-- **URL base**: `https://s3.amazonaws.com/tripdata/`
+- **Frecuencia**: mensual (~6 semanas de retraso) / **Volumen**: 3-5M viajes/mes
 
 ---
 
@@ -155,25 +169,19 @@ terraform init && terraform plan && terraform apply
 ```
 
 ### 6. Permisos de bootstrap
-Permisos que Terraform no puede otorgarse a sí mismo. Se configuran una única vez.
-
 ```bash
-# Acceso al bucket de estado de Terraform
 gsutil iam ch \
   serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com:roles/storage.admin \
   gs://BUCKET_NAME
 
-# Gestión de políticas IAM
 gcloud projects add-iam-policy-binding PROJECT_ID \
   --member="serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/resourcemanager.projectIamAdmin"
 
-# Permisos de Compute
 gcloud projects add-iam-policy-binding PROJECT_ID \
   --member="serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/compute.admin"
 
-# Service Account User en la VM
 gcloud iam service-accounts add-iam-policy-binding \
   citypulse-sa@PROJECT_ID.iam.gserviceaccount.com \
   --member="serviceAccount:citypulse-sa@PROJECT_ID.iam.gserviceaccount.com" \
@@ -183,26 +191,13 @@ gcloud iam service-accounts add-iam-policy-binding \
 
 ### 7. Workload Identity Federation
 
-Este proyecto usa **Workload Identity Federation** en lugar de claves JSON.
-GitHub Actions obtiene tokens efímeros sin necesidad de gestionar secretos.
-
-```
-Sin Workload Identity:
-GitHub Actions → clave JSON estática → GCP
-                 (secreto de larga duración, riesgo de filtración)
-
-Con Workload Identity:
-GitHub Actions → token OIDC efímero → GCP verifica con GitHub → acceso
-                 (sin secretos, token expira en minutos)
-```
+GitHub Actions obtiene tokens efímeros sin claves JSON gracias a
+**Workload Identity Federation** — práctica recomendada por Google.
 
 ```bash
-# Crear el pool
 gcloud iam workload-identity-pools create "github-pool" \
-  --project="PROJECT_ID" --location="global" \
-  --display-name="GitHub Actions Pool"
+  --project="PROJECT_ID" --location="global"
 
-# Crear el provider (reemplaza USER/REPO)
 gcloud iam workload-identity-pools providers create-oidc "github-provider" \
   --project="PROJECT_ID" --location="global" \
   --workload-identity-pool="github-pool" \
@@ -210,13 +205,11 @@ gcloud iam workload-identity-pools providers create-oidc "github-provider" \
   --attribute-condition="assertion.repository=='USER/REPO'" \
   --issuer-uri="https://token.actions.githubusercontent.com"
 
-# Vincular la Service Account
 gcloud iam service-accounts add-iam-policy-binding \
   citypulse-sa@PROJECT_ID.iam.gserviceaccount.com \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/USER/REPO"
 
-# Obtener el identificador del provider
 gcloud iam workload-identity-pools providers describe github-provider \
   --project="PROJECT_ID" --location="global" \
   --workload-identity-pool="github-pool" --format="value(name)"
@@ -252,20 +245,71 @@ gs://city-pulse-tr/bronze/
 └── citibike/year=YYYY/month=MM/YYYYMM-citibike-tripdata.zip
 ```
 
-El particionado `year=/month=/day=` sigue el estándar **Hive Partitioning**,
-compatible con BigQuery para lecturas eficientes por rango de fechas.
+---
+
+## Procesamiento Silver
+
+Los procesadores leen los datos crudos de GCS Bronze, los limpian,
+tipan y escriben en GCS Silver en formato **Parquet**.
+
+### ¿Por qué Parquet?
+- **Columnar**: lecturas analíticas 10x más rápidas que CSV
+- **Compresión nativa**: ocupa 5-10x menos que JSON o CSV
+- **Tipos garantizados**: fechas son fechas, números son números
+- **Compatible** con BigQuery, Spark y cualquier motor analítico
+
+### Instalar dependencias
+```bash
+pip install -r processing/requirements.txt
+```
+
+### Ejecutar los procesadores
+Todos soportan `--dry-run` para validar sin escribir en GCS.
+
+**Clima:**
+```bash
+python -m processing.run_weather --dry-run --date 2026-03-06
+python -m processing.run_weather --date 2026-03-06
+```
+
+**Calidad del aire:**
+```bash
+python -m processing.run_air_quality --dry-run --date 2026-03-06
+python -m processing.run_air_quality --date 2026-03-06
+```
+
+**Citibike:**
+```bash
+python -m processing.run_citibike --dry-run --year 2025 --month 1
+python -m processing.run_citibike --year 2025 --month 1
+```
+
+### Transformaciones aplicadas en Silver
+
+| Fuente | Transformaciones |
+|--------|-----------------|
+| Weather | Arrays horarios → filas, tipos Float64, columnas `date` y `location` |
+| Air Quality | Arrays horarios → filas, tipos Float64/Int64, categoría AQI calculada |
+| Citibike | Descompresión ZIP, selección de columnas, cálculo de `duration_minutes`, filtro de viajes inválidos |
+
+### Estructura en GCS Silver
+```
+gs://city-pulse-tr/silver/
+├── weather/year=YYYY/month=MM/day=DD/weather_YYYYMMDD.parquet
+├── air_quality/year=YYYY/month=MM/day=DD/air_quality_YYYYMMDD.parquet
+└── citibike/year=YYYY/month=MM/citibike_YYYYMM.parquet
+```
 
 ---
 
 ## Orquestación con Airflow
 
 Airflow corre en una **VM e2-micro de GCP (free tier)** como servicio
-permanente gestionado por `systemd`. Arranca automáticamente con la VM
-y se reinicia solo si falla.
+permanente gestionado por `systemd`.
 
 ### ¿Por qué VM y no Cloud Composer?
-Cloud Composer tiene un coste de ~375€/mes. La VM e2-micro es **permanentemente
-gratuita** en GCP y suficiente para este proyecto gracias al swap configurado.
+Cloud Composer cuesta ~375€/mes. La VM e2-micro es permanentemente gratuita
+y suficiente gracias al swap de 4GB configurado.
 
 ### Configuración de la VM
 
@@ -274,8 +318,7 @@ gratuita** en GCP y suficiente para este proyecto gracias al swap configurado.
 gcloud compute ssh citypulse-airflow --zone=us-central1-a --project=PROJECT_ID
 ```
 
-**Añadir swap** — La VM e2-micro tiene 1GB de RAM. El swap reserva espacio
-en disco como memoria adicional para que Airflow pueda arrancar sin problemas:
+**Añadir swap:**
 ```bash
 sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
@@ -288,9 +331,11 @@ sudo apt-get update -y && sudo apt-get install -y python3-pip python3-venv git
 python3 -m venv ~/airflow-env && source ~/airflow-env/bin/activate
 pip install "apache-airflow==2.8.1" \
   --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.8.1/constraints-3.10.txt"
+pip install -r ~/citypulse_analytics/ingestion/requirements.txt
+pip install -r ~/citypulse_analytics/processing/requirements.txt
 ```
 
-**Inicializar y crear usuario admin:**
+**Inicializar y crear usuario:**
 ```bash
 export AIRFLOW_HOME=~/airflow
 airflow db init
@@ -326,80 +371,63 @@ sudo systemctl daemon-reload && sudo systemctl enable airflow && sudo systemctl 
 
 ### Conectar la VM con GitHub (Deploy Key)
 
-GitHub eliminó la autenticación por usuario/contraseña en 2021. La alternativa
-son las **Deploy Keys**: claves SSH vinculadas exclusivamente a un repositorio,
-siguiendo el principio de mínimo privilegio.
+GitHub eliminó la autenticación por usuario/contraseña en 2021.
+Las **Deploy Keys** son claves SSH vinculadas exclusivamente a un repositorio.
 
 ```bash
-# Generar la clave en la VM
 ssh-keygen -t ed25519 -C "citypulse-airflow-vm" -f ~/.ssh/github_key -N ""
+cat ~/.ssh/github_key.pub  # añadir en GitHub → Settings → SSH keys
 
-# Ver la clave pública y añadirla en GitHub
-# Settings → SSH and GPG keys → New SSH key
-cat ~/.ssh/github_key.pub
-
-# Configurar SSH para usar esa clave con GitHub
 cat >> ~/.ssh/config << 'SSHEOF'
 Host github.com
   IdentityFile ~/.ssh/github_key
   User git
 SSHEOF
 
-# Verificar conexión
 ssh -T git@github.com
-
-# Clonar el repositorio
 git clone git@github.com:TomasRipsky/citypulse_analytics.git
-
-# Instalar dependencias
-source ~/airflow-env/bin/activate
-pip install -r ~/citypulse_analytics/ingestion/requirements.txt
 ```
 
-### Desplegar los DAGs por primera vez
+### Desplegar los DAGs
 
+**Primera vez:**
 ```bash
-mkdir -p ~/airflow/dags/prod
-mkdir -p ~/airflow/dags/dev
+mkdir -p ~/airflow/dags/prod ~/airflow/dags/dev
 cp ~/citypulse_analytics/orchestration/dags/*.py ~/airflow/dags/prod/
+```
+
+**Actualizar tras un merge:**
+```bash
+cd ~/citypulse_analytics && git pull
+cp orchestration/dags/*.py ~/airflow/dags/prod/
 ```
 
 ### Flujo de trabajo: dev vs prod
 
-Los DAGs están separados en dos entornos dentro de la VM para distinguir
-claramente entre DAGs estables y DAGs en desarrollo.
-
 ```
 ~/airflow/dags/
-├── prod/    ← DAGs mergeados via PR, estables, con schedule activo
+├── prod/    ← DAGs mergeados via PR, estables, schedule activo
 └── dev/     ← DAGs en desarrollo, experimentales, siempre pausados
 ```
 
-Esta separación se refleja también en el `dag_id` de cada DAG:
-
+Los `dag_id` siguen la convención de prefijos:
 ```python
-# DAG de producción — llega via PR y merge a main
-dag_id="prod.daily_ingestion"
-
-# DAG en desarrollo — creado directamente en la VM para iterar rápido
-dag_id="dev.mi_nuevo_dag"
+dag_id="prod.daily_ingestion"   # producción
+dag_id="dev.mi_nuevo_dag"       # desarrollo
 ```
 
-**Regla fundamental:** nunca editar archivos de `prod/` directamente en la VM.
-Solo `dev/` es para experimentar. Cuando un DAG está listo, pasa por el repo.
+**Regla:** nunca editar archivos de `prod/` directamente en la VM.
 
-#### Flujo de desarrollo de un DAG nuevo
+#### Ciclo de vida de un DAG nuevo
 
 ```
-1. Crear el DAG en VS Code (Remote SSH) → ~/airflow/dags/dev/mi_dag.py
-2. Airflow lo detecta automáticamente en ~30 segundos
-3. Probar desde la UI con Trigger manual
-4. Cuando funciona → copiar al repo local → PR → merge → mover a prod/
+1. Crear en VS Code (Remote SSH) → ~/airflow/dags/dev/mi_dag.py
+2. Airflow lo detecta en ~30 segundos
+3. Probar con Trigger manual desde la UI
+4. Cuando funciona → copiar al repo → PR → merge → mover a prod/
 ```
 
-Todo DAG en `dev/` debe incluir `is_paused_upon_creation=True` para que
-no se ejecute automáticamente por accidente:
-
+Todo DAG en `dev/` debe incluir:
 ```python
 with DAG(
     dag_id="dev.mi_nuevo_dag",
@@ -409,76 +437,47 @@ with DAG(
 ```
 
 #### Promover un DAG de dev a prod
-
-Una vez el DAG está validado en la VM, sincronizarlo con el repo:
-
 ```bash
-# Desde tu máquina local — descarga el DAG de la VM
 gcloud compute scp \
   citypulse-airflow:/home/usuario/airflow/dags/dev/mi_dag.py \
   ./orchestration/dags/mi_dag.py \
   --zone=us-central1-a
-
-# Flujo habitual
-git checkout -b feat/add-mi-dag
-git add orchestration/dags/mi_dag.py
-git commit -m "feat: add mi_dag to production"
-git push origin feat/add-mi-dag
-# → PR → merge → copiar a prod/ en la VM
 ```
 
 ### Conectar VS Code a la VM (Remote SSH)
 
-**Remote SSH** es una extensión de VS Code que permite editar archivos
-directamente en la VM como si fueran locales. Es la herramienta principal
-para desarrollar DAGs en el entorno `dev/` sin pasar por el ciclo completo
-de PR cada vez.
+**Remote SSH** permite editar archivos en la VM directamente desde VS Code,
+ideal para iterar rápidamente en DAGs de desarrollo sin pasar por el ciclo de PR.
 
-**Instalación:**
-1. Instalar la extensión **Remote - SSH** en VS Code
-2. Ejecutar este comando una única vez en tu máquina local para configurar
-   automáticamente el acceso SSH a todas tus VMs de GCP:
 ```bash
+# Una sola vez en tu máquina local — configura el acceso SSH a todas las VMs de GCP
 gcloud compute config-ssh --project=PROJECT_ID
 ```
-3. En VS Code: `Ctrl+Shift+P` → `Remote-SSH: Connect to Host` → `citypulse-airflow`
-4. Abrir carpeta: `/home/usuario/airflow/dags`
 
-A partir de ahí cualquier archivo que crees o edites en VS Code se guarda
-directamente en la VM y Airflow lo detecta en ~30 segundos.
+Luego en VS Code: `Ctrl+Shift+P` → `Remote-SSH: Connect to Host` → `citypulse-airflow`
+
+Abre la carpeta `/home/usuario/airflow/dags` y edita directamente.
 
 ### Acceder a la UI de Airflow
 
-El puerto 8080 está bloqueado en redes domésticas. La solución es un
-**túnel SSH** que redirige el tráfico a través del puerto 22.
-
-```
-Sin túnel: navegador → internet → puerto 8080 VM  ❌ bloqueado por ISP
-Con túnel: navegador → localhost:8080 → SSH → VM → Airflow ✅
-```
-
-**Cada vez que quieras acceder a la UI**, abre este comando en una terminal
-de tu máquina local y mantenla abierta mientras usas Airflow:
+El puerto 8080 está bloqueado en redes domésticas. Usa el **túnel SSH**
+cada vez que quieras ver la UI — mantén la terminal abierta mientras la usas:
 
 ```bash
 gcloud compute ssh citypulse-airflow \
-  --zone=us-central1-a \
-  --project=PROJECT_ID \
+  --zone=us-central1-a --project=PROJECT_ID \
   --ssh-flag="-L 8080:localhost:8080" \
   --ssh-flag="-N"
 ```
 
 Acceder a: `http://localhost:8080` — Credenciales: `admin` / `admin`
 
-> Los DAGs se ejecutan automáticamente aunque no tengas el túnel abierto.
-> El túnel solo es necesario para ver la UI.
-
 ### DAGs de producción
 
-| DAG | Schedule | Descripción |
-|-----|----------|-------------|
-| `prod.daily_ingestion` | Cada día a las 6:00 AM UTC | Clima y calidad del aire en paralelo |
-| `prod.monthly_ingestion` | Día 8 de cada mes a las 6:00 AM UTC | Descarga Citibike |
+| DAG | Schedule | Tareas |
+|-----|----------|--------|
+| `prod.daily_ingestion` | Cada día 6:00 AM UTC | extract_weather → process_weather / extract_air_quality → process_air_quality (en paralelo) |
+| `prod.monthly_ingestion` | Día 8 de cada mes 6:00 AM UTC | extract_citibike → process_citibike |
 
 ---
 
@@ -500,7 +499,7 @@ Solo se activa con cambios en `infrastructure/terraform/`.
 | **1. Infraestructura** | Terraform, GCP, Service Account, CI/CD | ✅ Completada |
 | **2. Ingesta** | Extractores Python, GCS Bronze | ✅ Completada |
 | **3. Orquestación** | Airflow en GCP VM, DAGs automáticos | ✅ Completada |
-| **4. Procesamiento** | Transformaciones Silver layer | ⏳ Pendiente |
+| **4. Procesamiento** | Transformaciones Silver, Parquet | ✅ Completada |
 | **5. Warehouse** | Carga a BigQuery Staging | ⏳ Pendiente |
 | **6. Transformación** | Modelos DBT Gold layer | ⏳ Pendiente |
 | **7. Visualización** | Dashboard en Looker Studio | ⏳ Pendiente |
