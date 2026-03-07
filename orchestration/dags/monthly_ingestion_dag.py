@@ -69,7 +69,7 @@ def extract_citibike(**context):
 
 
 with DAG(
-    dag_id="monthly_ingestion",
+    dag_id="prod.monthly_ingestion",
     description="Ingesta mensual de datos de Citibike NYC",
     default_args=default_args,
     start_date=datetime(2025, 1, 1),
