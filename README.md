@@ -17,9 +17,10 @@
 6. [Ingesta de Datos](#ingesta-de-datos)
 7. [Procesamiento Silver](#procesamiento-silver)
 8. [Carga a BigQuery](#carga-a-bigquery)
-9. [Orquestación con Airflow](#orquestación-con-airflow)
-10. [CI/CD](#cicd)
-11. [Fases del Proyecto](#fases-del-proyecto)
+9. [Transformaciones DBT](#transformaciones-dbt)
+10. [Orquestación con Airflow](#orquestación-con-airflow)
+11. [CI/CD](#cicd)
+12. [Fases del Proyecto](#fases-del-proyecto)
 
 ---
 
@@ -59,7 +60,7 @@ de la industria que separa claramente cada etapa del ciclo de vida del dato.
 | Data Lake | Google Cloud Storage | Capas Bronze y Silver |
 | Formato Silver | Apache Parquet | Columnar, comprimido, tipado |
 | Data Warehouse | BigQuery | Staging y Gold layer |
-| Transformaciones | DBT Core | Modelos y tests de calidad |
+| Transformaciones | DBT Core 1.7 | Modelos y tests de calidad |
 | Infraestructura | Terraform | Infraestructura como código |
 | CI/CD | GitHub Actions | Despliegue automático a GCP |
 | Autenticación | Workload Identity Federation | Sin claves JSON |
@@ -105,8 +106,21 @@ citypulse-analytics/
 ├── orchestration/dags/
 │   ├── daily_ingestion_dag.py
 │   └── monthly_ingestion_dag.py
-├── transformation/             # DBT (Fase 6)
-├── .env                        # No se sube al repo
+├── transformation/
+│   ├── dbt_project.yml
+│   ├── macros/generate_schema_name.sql
+│   └── models/
+│       ├── staging/
+│       │   ├── sources.yml
+│       │   ├── stg_weather.sql
+│       │   ├── stg_air_quality.sql
+│       │   └── stg_citibike.sql
+│       └── marts/
+│           ├── schema.yml
+│           ├── daily_weather_summary.sql
+│           ├── daily_air_quality_summary.sql
+│           └── daily_mobility_summary.sql
+├── .env
 └── README.md
 ```
 
@@ -191,10 +205,6 @@ gcloud iam service-accounts add-iam-policy-binding \
 ```
 
 ### 7. Workload Identity Federation
-
-GitHub Actions obtiene tokens efímeros sin claves JSON gracias a
-**Workload Identity Federation** — práctica recomendada por Google.
-
 ```bash
 gcloud iam workload-identity-pools create "github-pool" \
   --project="PROJECT_ID" --location="global"
@@ -267,6 +277,12 @@ python -m processing.run_air_quality [--dry-run] [--date YYYY-MM-DD]
 python -m processing.run_citibike    [--dry-run] [--year YYYY --month MM]
 ```
 
+### Nota sobre timestamps
+Los procesadores serializan los timestamps como `datetime64[us, UTC]` antes
+de escribir el Parquet. Esto es necesario porque BigQuery requiere timestamps
+en microsegundos con timezone UTC explícito para reconocerlos como `TIMESTAMP`
+en lugar de `INT64`.
+
 ### Transformaciones aplicadas
 
 | Fuente | Transformaciones |
@@ -288,9 +304,7 @@ gs://city-pulse-tr/silver/
 ## Carga a BigQuery
 
 Los loaders leen los Parquet de GCS Silver y los cargan en
-BigQuery Staging usando la **carga nativa desde GCS** — BigQuery
-lee el Parquet directamente sin descargar nada a través de Python,
-lo que lo hace más rápido y eficiente.
+BigQuery Staging usando la **carga nativa desde GCS**.
 
 ```bash
 pip install -r loading/requirements.txt
@@ -308,7 +322,7 @@ python -m loading.run_citibike    [--dry-run] [--year YYYY --month MM]
 | Air Quality | Append incremental (delete día + insert) | Datos diarios acumulativos |
 | Citibike | Truncate mensual (delete mes + insert) | Archivo mensual completo |
 
-La estrategia de **delete + insert** garantiza **idempotencia**: si el pipeline
+La estrategia **delete + insert** garantiza idempotencia: si el pipeline
 falla y se reejcuta para la misma fecha, no se acumulan duplicados.
 
 ### Tablas en BigQuery Staging
@@ -318,6 +332,83 @@ falla y se reejcuta para la misma fecha, no se acumulan duplicados.
 | `weather` | `citypulse_staging` | 24 filas/día — datos horarios de clima |
 | `air_quality` | `citypulse_staging` | 24 filas/día — datos horarios de calidad del aire |
 | `citibike` | `citypulse_staging` | 3-5M filas/mes — viajes en bicicleta |
+
+---
+
+## Transformaciones DBT
+
+DBT lee las tablas de `citypulse_staging` y construye la **capa Gold**
+en `citypulse_marts`: modelos analíticos listos para el dashboard.
+
+### Instalación
+```bash
+pip install dbt-bigquery==1.7.0
+```
+
+### Configuración
+Crear `~/.dbt/profiles.yml` (fuera del repo — nunca subir a GitHub):
+```yaml
+citypulse:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: your-project-id
+      dataset: citypulse_marts
+      location: us-central1
+      threads: 1
+```
+
+Usamos `method: oauth` porque la autenticación viene de
+`gcloud auth application-default login`, sin necesidad de claves JSON.
+
+### Ejecutar los modelos
+```bash
+cd transformation
+dbt debug    # verifica la conexión con BigQuery
+dbt run      # ejecuta todos los modelos
+dbt test     # ejecuta los tests de calidad de datos
+```
+
+### Arquitectura de modelos
+
+**Staging** — vistas ligeras sobre las tablas raw. Solo castean tipos
+y filtran nulos, sin lógica de negocio:
+
+| Modelo | Dataset | Tipo |
+|--------|---------|------|
+| `stg_weather` | `citypulse_staging` | View |
+| `stg_air_quality` | `citypulse_staging` | View |
+| `stg_citibike` | `citypulse_staging` | View |
+
+**Marts** — tablas con agregaciones diarias, listas para Looker Studio:
+
+| Modelo | Dataset | Descripción |
+|--------|---------|-------------|
+| `daily_weather_summary` | `citypulse_marts` | Temp media/min/max, precipitación, viento, humedad por día |
+| `daily_air_quality_summary` | `citypulse_marts` | AQI medio/max, horas por categoría, categoría dominante por día |
+| `daily_mobility_summary` | `citypulse_marts` | Viajes totales, duración media, % member vs casual por día |
+
+### Granularidad y delay por fuente
+
+| Fuente | Granularidad | Disponibilidad |
+|--------|-------------|----------------|
+| Weather | Diaria | Al día siguiente |
+| Air Quality | Diaria | Al día siguiente |
+| Citibike | Mensual | ~6 semanas de retraso |
+
+Los tres modelos son **independientes** — no hay joins entre ellos.
+Esto evita forzar un delay artificial en clima y aire por culpa
+del retraso de Citibike.
+
+### Macro generate_schema_name
+
+DBT por defecto concatena el dataset del `profiles.yml` con el `+schema`
+definido en `dbt_project.yml`, produciendo nombres como
+`citypulse_marts_citypulse_staging`. La macro `generate_schema_name`
+sobreescribe este comportamiento para usar el `+schema` directamente
+como nombre del dataset sin concatenación.
 
 ---
 
@@ -354,6 +445,9 @@ pip install -r ~/citypulse_analytics/ingestion/requirements.txt
 pip install -r ~/citypulse_analytics/processing/requirements.txt
 pip install -r ~/citypulse_analytics/loading/requirements.txt
 ```
+
+> Todas las dependencias deben instalarse en `~/airflow-env` — es el
+> entorno que usa systemd para ejecutar Airflow y los DAGs.
 
 **Inicializar y crear usuario:**
 ```bash
@@ -507,7 +601,7 @@ Solo se activa con cambios en `infrastructure/terraform/`.
 | **3. Orquestación** | Airflow en GCP VM, DAGs automáticos | ✅ Completada |
 | **4. Procesamiento** | Transformaciones Silver, Parquet | ✅ Completada |
 | **5. Warehouse** | Carga a BigQuery Staging | ✅ Completada |
-| **6. Transformación** | Modelos DBT Gold layer | ⏳ Pendiente |
+| **6. Transformación** | Modelos DBT Gold layer | ✅ Completada |
 | **7. Visualización** | Dashboard en Looker Studio | ⏳ Pendiente |
 
 ---
