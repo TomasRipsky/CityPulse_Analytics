@@ -1,19 +1,22 @@
 """
-DAG de ingesta, procesamiento y carga diario — Clima y Calidad del Aire.
+DAG de ingesta, procesamiento, carga y transformación diario.
 
 Ejecuta cada día a las 6:00 AM UTC:
 1. Extrae datos de las APIs (Bronze)
 2. Procesa y limpia los datos (Silver)
 3. Carga a BigQuery Staging
+4. Ejecuta dbt run para actualizar los marts Gold
 
 Las dos fuentes corren en paralelo entre sí pero cada una
 respeta el orden extracción → procesamiento → carga.
+El dbt run se ejecuta al final cuando ambas cadenas han terminado.
 """
 
 from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.operators.bash import BashOperator
 
 default_args = {
     "owner": "citypulse",
@@ -25,6 +28,8 @@ default_args = {
 REPO_PATH  = "/home/usuario/citypulse_analytics"
 BUCKET     = "city-pulse-tr"
 PROJECT_ID = "project-6c4733db-2f24-496d-90f"
+DBT_DIR    = f"{REPO_PATH}/transformation"
+VENV_BIN   = "/home/usuario/airflow-env/bin"
 
 
 def _sync_repo():
@@ -76,7 +81,7 @@ def load_weather(**context):
     execution_date = context["logical_date"].date()
     loader = WeatherLoader(project_id=PROJECT_ID, bucket_name=BUCKET)
     rows = loader.load(loading_date=execution_date)
-    print(f"✅ BigQuery: {rows} rows loaded for {execution_date}")
+    print(f"✅ BigQuery: {rows} rows for {execution_date}")
     return rows
 
 
@@ -124,18 +129,18 @@ def load_air_quality(**context):
     execution_date = context["logical_date"].date()
     loader = AirQualityLoader(project_id=PROJECT_ID, bucket_name=BUCKET)
     rows = loader.load(loading_date=execution_date)
-    print(f"✅ BigQuery: {rows} rows loaded for {execution_date}")
+    print(f"✅ BigQuery: {rows} rows for {execution_date}")
     return rows
 
 
 with DAG(
     dag_id="prod.daily_ingestion",
-    description="Ingesta, procesamiento y carga diaria de clima y calidad del aire para NYC",
+    description="Ingesta, procesamiento, carga y transformación diaria de clima y calidad del aire",
     default_args=default_args,
     start_date=datetime(2025, 1, 1),
     schedule_interval="0 6 * * *",
     catchup=False,
-    tags=["ingestion", "processing", "loading", "daily", "prod"],
+    tags=["ingestion", "processing", "loading", "dbt", "daily", "prod"],
 ) as dag:
 
     t_extract_weather     = PythonOperator(task_id="extract_weather",     python_callable=extract_weather)
@@ -146,6 +151,11 @@ with DAG(
     t_process_air_quality = PythonOperator(task_id="process_air_quality", python_callable=process_air_quality)
     t_load_air_quality    = PythonOperator(task_id="load_air_quality",    python_callable=load_air_quality)
 
-    # Cada fuente respeta su orden pero ambas corren en paralelo
-    t_extract_weather     >> t_process_weather     >> t_load_weather
-    t_extract_air_quality >> t_process_air_quality >> t_load_air_quality
+    # dbt run se ejecuta cuando ambas cadenas han terminado de cargar
+    t_dbt_run = BashOperator(
+        task_id="dbt_run",
+        bash_command=f"cd {DBT_DIR} && {VENV_BIN}/dbt run",
+    )
+
+    t_extract_weather     >> t_process_weather     >> t_load_weather     >> t_dbt_run
+    t_extract_air_quality >> t_process_air_quality >> t_load_air_quality >> t_dbt_run
