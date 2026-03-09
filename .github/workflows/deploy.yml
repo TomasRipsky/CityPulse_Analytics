@@ -11,15 +11,13 @@ on:
 jobs:
 
   # ── DBT TESTS ──────────────────────────────────────────────────────────────
-  # Se ejecuta en cada PR que toque archivos de transformación.
+  # Se ejecuta en todos los PRs.
   # Valida que todos los modelos compilan y los tests de calidad pasan
   # antes de mergear — evita que modelos rotos lleguen a producción.
   dbt-test:
     name: DBT Tests
     runs-on: ubuntu-latest
-    if: |
-      github.event_name == 'pull_request' &&
-      contains(toJson(github.event.pull_request.changed_files), 'transformation/')
+    if: github.event_name == 'pull_request'
 
     permissions:
       contents: read
@@ -77,9 +75,7 @@ jobs:
             const outcome = '${{ steps.dbt_test.outcome }}';
             const emoji = outcome === 'success' ? '✅' : '❌';
             const status = outcome === 'success' ? 'All tests passed' : 'Some tests failed';
-            const body = `#### ${emoji} DBT Tests — ${status}
-            
-            Run \`dbt test\` locally to see full details.`;
+            const body = `#### ${emoji} DBT Tests — ${status}\n\nRun \`dbt test\` locally to see full details.`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -96,9 +92,6 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    if: |
-      contains(toJson(github.event.pull_request.changed_files), 'infrastructure/terraform/') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
 
     permissions:
       contents: read
