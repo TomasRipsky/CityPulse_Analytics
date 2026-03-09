@@ -1,21 +1,104 @@
-name: Deploy Infrastructure
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
       - main
-    paths:
-      - "infrastructure/terraform/**"
   pull_request:
     branches:
       - main
-    paths:
-      - "infrastructure/terraform/**"
 
 jobs:
+
+  # ── DBT TESTS ──────────────────────────────────────────────────────────────
+  # Se ejecuta en cada PR que toque archivos de transformación.
+  # Valida que todos los modelos compilan y los tests de calidad pasan
+  # antes de mergear — evita que modelos rotos lleguen a producción.
+  dbt-test:
+    name: DBT Tests
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' &&
+      contains(toJson(github.event.pull_request.changed_files), 'transformation/')
+
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install DBT
+        run: pip install dbt-bigquery==1.7.0
+
+      - name: Create DBT profiles
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'PROFILE'
+          citypulse:
+            target: ci
+            outputs:
+              ci:
+                type: bigquery
+                method: oauth
+                project: ${{ vars.GCP_PROJECT_ID }}
+                dataset: citypulse_marts
+                location: us-central1
+                threads: 4
+          PROFILE
+
+      - name: DBT compile
+        working-directory: transformation
+        run: dbt compile
+
+      - name: DBT test
+        id: dbt_test
+        working-directory: transformation
+        run: dbt test
+        continue-on-error: true
+
+      - name: Comment DBT results on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcome = '${{ steps.dbt_test.outcome }}';
+            const emoji = outcome === 'success' ? '✅' : '❌';
+            const status = outcome === 'success' ? 'All tests passed' : 'Some tests failed';
+            const body = `#### ${emoji} DBT Tests — ${status}
+            
+            Run \`dbt test\` locally to see full details.`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Fail if DBT tests failed
+        if: steps.dbt_test.outcome == 'failure'
+        run: exit 1
+
+  # ── TERRAFORM ──────────────────────────────────────────────────────────────
+  # Se ejecuta solo cuando hay cambios en infrastructure/terraform/
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
+    if: |
+      contains(toJson(github.event.pull_request.changed_files), 'infrastructure/terraform/') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
 
     permissions:
       contents: read
