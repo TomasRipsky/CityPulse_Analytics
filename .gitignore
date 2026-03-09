@@ -25,3 +25,9 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+
+# DBT
+transformation/target/
+transformation/dbt_packages/
+transformation/logs/
+transformation/.user.yml
