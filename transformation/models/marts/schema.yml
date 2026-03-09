@@ -18,6 +18,9 @@ models:
         description: "Temperatura media del día en grados Celsius"
         tests:
           - not_null
+          - between:
+              min_value: -30
+              max_value: 50
       - name: temp_min_c
         description: "Temperatura mínima registrada durante el día"
       - name: temp_max_c
@@ -32,6 +35,10 @@ models:
         description: "Velocidad máxima del viento registrada durante el día en km/h"
       - name: humidity_avg_pct
         description: "Humedad relativa media del día en porcentaje"
+        tests:
+          - between:
+              min_value: 0
+              max_value: 100
 
   - name: daily_air_quality_summary
     description: >
@@ -58,6 +65,9 @@ models:
         description: "Índice de calidad del aire medio del día (escala EPA de EEUU)"
         tests:
           - not_null
+          - between:
+              min_value: 0
+              max_value: 500
       - name: aqi_max
         description: "Índice de calidad del aire máximo registrado durante el día"
       - name: aqi_dominant_category
@@ -111,6 +121,10 @@ models:
         description: "Número de estaciones de destino distintas con actividad ese día"
       - name: duration_avg_min
         description: "Duración media de los viajes en minutos"
+        tests:
+          - between:
+              min_value: 0
+              max_value: 1440
       - name: duration_min_min
         description: "Duración mínima registrada en minutos"
       - name: duration_max_min
