@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
+from airflow.models import Variable
 
 default_args = {
     "owner": "citypulse",
@@ -25,9 +26,12 @@ default_args = {
     "email_on_failure": False,
 }
 
-REPO_PATH  = "/home/usuario/citypulse_analytics"
-BUCKET     = "city-pulse-tr"
-PROJECT_ID = "project-6c4733db-2f24-496d-90f"
+# Leemos la configuración desde Airflow Variables en lugar de hardcodear.
+# Esto permite cambiar valores desde la UI sin modificar código ni hacer deploy.
+# Valores por defecto como fallback por si las variables no están definidas.
+REPO_PATH  = Variable.get("citypulse_repo_path",  default_var="/home/usuario/citypulse_analytics")
+BUCKET     = Variable.get("citypulse_bucket",      default_var="city-pulse-tr")
+PROJECT_ID = Variable.get("citypulse_project_id",  default_var="project-6c4733db-2f24-496d-90f")
 DBT_DIR    = f"{REPO_PATH}/transformation"
 VENV_BIN   = "/home/usuario/airflow-env/bin"
 
