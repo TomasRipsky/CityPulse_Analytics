@@ -7,7 +7,6 @@ with source as (
 
 staged as (
     select
-        --Casteo y renombrado
         cast(timestamp as timestamp)      as timestamp,
         cast(date as date)                as date,
         cast(temperature_c as float64)    as temperature_c,
