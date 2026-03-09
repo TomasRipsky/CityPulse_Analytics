@@ -7,7 +7,6 @@ with source as (
 
 staged as (
     select
-        --Casteo y renombrado
         cast(timestamp as timestamp)        as timestamp,
         cast(date as date)                  as date,
         cast(pm2_5 as float64)              as pm2_5,
