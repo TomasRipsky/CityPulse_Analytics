@@ -57,3 +57,41 @@ models:
               values:
                 - "member"
                 - "casual"
+
+  - name: monthly_city_pulse
+    description: >
+      Mart de correlación mensual — une clima, calidad del aire y movilidad
+      para analizar cómo el entorno urbano afecta el comportamiento ciudadano en NYC.
+      Una fila por mes con métricas agregadas y variables de correlación derivadas.
+    columns:
+      - name: month_date
+        description: "Primer día del mes — usado como eje temporal en Looker Studio"
+        tests:
+          - not_null
+          - unique
+      - name: total_rides
+        description: "Total de viajes en Citibike en el mes"
+        tests:
+          - not_null
+      - name: rides_per_day
+        description: "Viajes medios por día — normaliza meses con distinto número de días"
+        tests:
+          - not_null
+      - name: weather_category
+        description: "Clasificación climática del mes basada en temperatura media"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Freezing", "Cold", "Mild", "Warm", "Hot"]
+      - name: air_quality_category
+        description: "Clasificación de calidad del aire del mes basada en AQI medio"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Good", "Moderate", "Unhealthy for Sensitive Groups", "Unhealthy"]
+      - name: conditions_category
+        description: "Clasificación general de condiciones del mes — Favorable, Neutral o Adverse"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["Favorable", "Neutral", "Adverse"]
