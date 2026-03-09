@@ -10,14 +10,41 @@ on:
 
 jobs:
 
+  # ── DETECT CHANGES ─────────────────────────────────────────────────────────
+  # Detecta qué partes del repo han cambiado para activar solo los jobs
+  # relevantes — evita ejecutar Terraform cuando solo cambia transformación
+  # y viceversa.
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      transformation: ${{ steps.filter.outputs.transformation }}
+      terraform: ${{ steps.filter.outputs.terraform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            transformation:
+              - 'transformation/**'
+            terraform:
+              - 'infrastructure/terraform/**'
+
   # ── DBT TESTS ──────────────────────────────────────────────────────────────
-  # Se ejecuta en todos los PRs.
-  # Valida que todos los modelos compilan y los tests de calidad pasan
-  # antes de mergear — evita que modelos rotos lleguen a producción.
+  # Se ejecuta en PRs que toquen archivos de transformación.
+  # Valida que todos los modelos compilan y los 30 tests de calidad pasan
+  # antes de mergear.
   dbt-test:
     name: DBT Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: |
+      github.event_name == 'pull_request' &&
+      needs.changes.outputs.transformation == 'true'
 
     permissions:
       contents: read
@@ -40,7 +67,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install DBT
-        run: pip install dbt-bigquery==1.7.0
+        run: pip install dbt-bigquery==1.7.0 google-cloud-bigquery==3.13.0
 
       - name: Create DBT profiles
         run: |
@@ -92,6 +119,8 @@ jobs:
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
 
     permissions:
       contents: read
