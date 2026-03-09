@@ -32,61 +32,70 @@ de la industria que separa claramente cada etapa del ciclo de vida del dato.
 
 ```mermaid
 flowchart LR
-    subgraph Sources["📡 Fuentes de Datos"]
-        A1[Open-Meteo\nForecast API]
-        A2[Open-Meteo\nAir Quality API]
-        A3[Citibike NYC\nS3 Public]
-    end
+    A1([Open-Meteo
+Forecast]) --> B
+    A2([Open-Meteo
+Air Quality]) --> B
+    A3([Citibike NYC
+S3 Public]) --> B
 
-    subgraph Orchestration["⚙️ Orquestación"]
-        B[Apache Airflow\nGCP VM e2-micro]
-    end
+    B[[Airflow
+GCP VM]] --> C1
 
-    subgraph Lake["🪣 Data Lake — GCS"]
-        C1[Bronze\nJSON / ZIP]
-        C2[Silver\nParquet]
-    end
+    C1[(GCS Bronze
+JSON / ZIP)] --> C2
+    C2[(GCS Silver
+Parquet)] --> D
 
-    subgraph Warehouse["🏭 Data Warehouse — BigQuery"]
-        D[Staging\ncitypulse_staging]
-    end
+    D[(BigQuery
+Staging)] --> E1
 
-    subgraph Transformation["🔄 Transformación — DBT"]
-        E1[Staging\nViews]
-        E2[Marts\nTables]
-    end
+    E1[DBT
+Staging Views] --> E2
+    E2[DBT
+Marts Tables] --> F
 
-    subgraph Dashboard["📊 Visualización"]
-        F[Looker Studio\nDashboard]
-    end
+    F([Looker Studio
+Dashboard])
 
-    A1 --> B
-    A2 --> B
-    A3 --> B
-    B --> C1
-    C1 --> C2
-    C2 --> D
-    D --> E1
-    E1 --> E2
-    E2 --> F
+    style A1 fill:#4A90D9,color:#fff,stroke:none
+    style A2 fill:#4A90D9,color:#fff,stroke:none
+    style A3 fill:#4A90D9,color:#fff,stroke:none
+    style B fill:#E8A838,color:#fff,stroke:none
+    style C1 fill:#5C6BC0,color:#fff,stroke:none
+    style C2 fill:#5C6BC0,color:#fff,stroke:none
+    style D fill:#43A047,color:#fff,stroke:none
+    style E1 fill:#F06292,color:#fff,stroke:none
+    style E2 fill:#F06292,color:#fff,stroke:none
+    style F fill:#26A69A,color:#fff,stroke:none
 ```
 
 ### Flujo de orquestación
 
+**DAG Diario** — `0 6 * * *`
 ```mermaid
-flowchart TD
-    subgraph daily["🕕 DAG Diario — 6:00 AM UTC"]
-        direction LR
-        W1[extract_weather] --> W2[process_weather] --> W3[load_weather]
-        A1[extract_air_quality] --> A2[process_air_quality] --> A3[load_air_quality]
-        W3 --> DBT[dbt run]
-        A3 --> DBT
-    end
+flowchart LR
+    EW[extract_weather] --> PW[process_weather] --> LW[load_weather] --> DR[dbt run]
+    EA[extract_air_quality] --> PA[process_air_quality] --> LA[load_air_quality] --> DR
 
-    subgraph monthly["📅 DAG Mensual — Día 8, 6:00 AM UTC"]
-        direction LR
-        C1[extract_citibike] --> C2[process_citibike] --> C3[load_citibike] --> DBT2[dbt run]
-    end
+    style EW fill:#4A90D9,color:#fff,stroke:none
+    style PW fill:#5C6BC0,color:#fff,stroke:none
+    style LW fill:#43A047,color:#fff,stroke:none
+    style EA fill:#4A90D9,color:#fff,stroke:none
+    style PA fill:#5C6BC0,color:#fff,stroke:none
+    style LA fill:#43A047,color:#fff,stroke:none
+    style DR fill:#F06292,color:#fff,stroke:none
+```
+
+**DAG Mensual** — `0 6 8 * *`
+```mermaid
+flowchart LR
+    EC[extract_citibike] --> PC[process_citibike] --> LC[load_citibike] --> DR[dbt run]
+
+    style EC fill:#4A90D9,color:#fff,stroke:none
+    style PC fill:#5C6BC0,color:#fff,stroke:none
+    style LC fill:#43A047,color:#fff,stroke:none
+    style DR fill:#F06292,color:#fff,stroke:none
 ```
 
 ### Linaje de datos DBT
@@ -684,13 +693,32 @@ cd transformation && dbt run  # actualizar marts tras el backfill
 
 ```mermaid
 flowchart LR
-    PR[Pull Request] --> DC[Detect Changes]
-    DC -->|transformation/ cambia| DBT[DBT Tests\n30 tests]
-    DC -->|infrastructure/terraform/ cambia| TF[Terraform Plan]
-    DBT -->|Pass| C1[Comentario en PR]
-    DBT -->|Fail| C2[Bloquea merge]
-    TF --> C3[Plan en PR]
-    MERGE[Merge a main] -->|terraform cambia| APPLY[Terraform Apply]
+    PR([Pull Request]) --> DC{Detect
+Changes}
+
+    DC -->|transformation/ cambia| DBT[DBT Tests
+30 tests]
+    DC -->|infrastructure/ cambia| TF[Terraform Plan]
+
+    DBT -->|✅ Pass| OK([Comentario ✅
+en PR])
+    DBT -->|❌ Fail| KO([Bloquea
+merge])
+    TF --> TP([Plan en
+comentario PR])
+
+    MERGE([Merge a main]) -->|terraform cambia| APPLY([Terraform
+Apply])
+
+    style PR fill:#4A90D9,color:#fff,stroke:none
+    style DC fill:#E8A838,color:#fff,stroke:none
+    style DBT fill:#F06292,color:#fff,stroke:none
+    style TF fill:#5C6BC0,color:#fff,stroke:none
+    style OK fill:#43A047,color:#fff,stroke:none
+    style KO fill:#E53935,color:#fff,stroke:none
+    style TP fill:#5C6BC0,color:#fff,stroke:none
+    style MERGE fill:#4A90D9,color:#fff,stroke:none
+    style APPLY fill:#43A047,color:#fff,stroke:none
 ```
 
 | Evento | Job | Comportamiento |
