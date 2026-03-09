@@ -24,6 +24,11 @@ staged as (
     from source
     where started_at is not null
       and duration_minutes > 0
+      -- Filtramos viajes cuya fecha de inicio no corresponde al mes del archivo.
+      -- Citibike incluye en cada ZIP algunos viajes de los últimos días del mes
+      -- anterior, lo que genera duplicados en daily_mobility_summary.
+      and extract(year from started_at)  = cast(year as int64)
+      and extract(month from started_at) = cast(month as int64)
 )
 
 select * from staged

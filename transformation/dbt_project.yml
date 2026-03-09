@@ -13,11 +13,19 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+# Descripción del proyecto — aparece en dbt docs
+# CityPulse Analytics analiza la relación entre clima, calidad del aire
+# y movilidad urbana en Nueva York usando datos de Open-Meteo y Citibike.
+
 models:
   citypulse:
     staging:
-      +materialized: view        # staging son vistas — ligeras, sin coste de almacenamiento
-      +schema: citypulse_staging # leen de citypulse_staging
+      +materialized: view        # vistas ligeras sin coste de almacenamiento
+      +schema: citypulse_staging
+      +docs:
+        node_color: "#A8D8EA"    # azul claro — capa de staging
     marts:
-      +materialized: table       # marts son tablas — persistidas, rápidas para Looker
-      +schema: citypulse_marts   # escriben en citypulse_marts
+      +materialized: table       # tablas persistidas, rápidas para Looker
+      +schema: citypulse_marts
+      +docs:
+        node_color: "#F9A825"    # naranja — capa gold/marts
