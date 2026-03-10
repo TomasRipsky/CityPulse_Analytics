@@ -54,21 +54,21 @@ The project follows the **Medallion Architecture** (Bronze → Silver → Gold),
 
 ```mermaid
 flowchart LR
-    A1([🌤️ Open-Meteo\nForecast]) --> B
-    A2([💨 Open-Meteo\nAir Quality]) --> B
-    A3([🚲 Citibike NYC\nS3 Public]) --> B
+    A1([🌤️ Open-Meteo<br/>Forecast]) --> B
+    A2([💨 Open-Meteo<br/>Air Quality]) --> B
+    A3([🚲 Citibike NYC<br/>S3 Public]) --> B
 
-    B[[⚙️ Airflow\nGCP VM e2-micro]] --> C1
+    B[[⚙️ Airflow<br/>GCP VM e2-micro]] --> C1
 
-    C1[(🟫 GCS Bronze\nJSON / ZIP)] --> C2
-    C2[(🥈 GCS Silver\nParquet)] --> D
+    C1[(🟫 GCS Bronze<br/>JSON / ZIP)] --> C2
+    C2[(🥈 GCS Silver<br/>Parquet)] --> D
 
-    D[(🟢 BigQuery\nStaging)] --> E1
+    D[(🟢 BigQuery<br/>Staging)] --> E1
 
-    E1[🔵 DBT\nStaging Views] --> E2
-    E2[🟡 DBT\nMarts Tables] --> F
+    E1[🔵 DBT<br/>Staging Views] --> E2
+    E2[🟡 DBT<br/>Marts Tables] --> F
 
-    F([📊 Looker Studio\nDashboard])
+    F([📊 Looker Studio<br/>Dashboard])
 
     style A1 fill:#4A90D9,color:#fff,stroke:none
     style A2 fill:#4A90D9,color:#fff,stroke:none
@@ -87,11 +87,11 @@ flowchart LR
 ```mermaid
 flowchart LR
     subgraph B["🟫  BRONZE  —  Raw"]
-        b1[Hourly JSON\nweather & air quality]
-        b2[Monthly ZIP\nCitibike trips]
+        b1[Hourly JSON<br/>weather & air quality]
+        b2[Monthly ZIP<br/>Citibike trips]
     end
     subgraph S["🥈  SILVER  —  Clean"]
-        s1[Typed Parquet\nUTC microseconds]
+        s1[Typed Parquet<br/>UTC microseconds]
     end
     subgraph G["🥇  GOLD  —  Aggregated"]
         g1[daily_weather_summary]
@@ -113,8 +113,8 @@ flowchart LR
 **Daily DAG** — `0 6 * * *`
 ```mermaid
 flowchart LR
-    EW([🌤️ extract\nweather]) --> PW[⚙️ process\nweather] --> LW[📥 load\nweather] --> DR{{🔄 dbt run}}
-    EA([💨 extract\nair_quality]) --> PA[⚙️ process\nair_quality] --> LA[📥 load\nair_quality] --> DR
+    EW([🌤️ extract<br/>weather]) --> PW[⚙️ process<br/>weather] --> LW[📥 load<br/>weather] --> DR{{🔄 dbt run}}
+    EA([💨 extract<br/>air_quality]) --> PA[⚙️ process<br/>air_quality] --> LA[📥 load<br/>air_quality] --> DR
 
     style EW fill:#4A90D9,color:#fff,stroke:none
     style PW fill:#5C6BC0,color:#fff,stroke:none
@@ -128,7 +128,7 @@ flowchart LR
 **Monthly DAG** — `0 6 8 * *` *(targets execution month − 2 months due to Citibike's ~6-week delay)*
 ```mermaid
 flowchart LR
-    EC([🚲 extract\ncitibike]) --> PC[⚙️ process\ncitibike] --> LC[📥 load\ncitibike] --> DR{{🔄 dbt run}}
+    EC([🚲 extract<br/>citibike]) --> PC[⚙️ process<br/>citibike] --> LC[📥 load<br/>citibike] --> DR{{🔄 dbt run}}
 
     style EC fill:#4A90D9,color:#fff,stroke:none
     style PC fill:#5C6BC0,color:#fff,stroke:none
@@ -140,19 +140,19 @@ flowchart LR
 
 ```mermaid
 graph LR
-    SRC1[(🟢 staging\n.weather)]      --> STG1[stg_weather]
-    SRC2[(🟢 staging\n.air_quality)]  --> STG2[stg_air_quality]
-    SRC3[(🟢 staging\n.citibike)]     --> STG3[stg_citibike]
+    SRC1[(🟢 staging<br/>.weather)]      --> STG1[stg_weather]
+    SRC2[(🟢 staging<br/>.air_quality)]  --> STG2[stg_air_quality]
+    SRC3[(🟢 staging<br/>.citibike)]     --> STG3[stg_citibike]
 
-    STG1 --> DWS[daily_weather\n_summary]
-    STG2 --> DAQS[daily_air_quality\n_summary]
-    STG3 --> DMS[daily_mobility\n_summary]
+    STG1 --> DWS[daily_weather<br/>_summary]
+    STG2 --> DAQS[daily_air_quality<br/>_summary]
+    STG3 --> DMS[daily_mobility<br/>_summary]
 
     DWS  --> MCP
     DAQS --> MCP
     DMS  --> MCP
 
-    MCP[⭐ monthly_city_pulse\nCross-source correlation]
+    MCP[⭐ monthly_city_pulse<br/>Cross-source correlation]
 
     style SRC1 fill:#2E7D32,color:#fff,stroke:none
     style SRC2 fill:#2E7D32,color:#fff,stroke:none
@@ -865,16 +865,16 @@ cd transformation && dbt run
 
 ```mermaid
 flowchart LR
-    PR([📬 Pull\nRequest]) --> DC{🔍 Detect\nChanges}
+    PR([📬 Pull<br/>Request]) --> DC{🔍 Detect<br/>Changes}
 
-    DC -->|transformation/| DBT[🧪 dbt compile\n+ dbt test]
-    DC -->|infrastructure/| TF[🏗️ terraform\nplan]
+    DC -->|transformation/| DBT[🧪 dbt compile<br/>+ dbt test]
+    DC -->|infrastructure/| TF[🏗️ terraform<br/>plan]
 
-    DBT -->|✅ 30/30| OK([💬 Comment ✅\non PR])
-    DBT -->|❌ fails| KO([🚫 Block\nmerge])
-    TF  --> TP([💬 Plan in\nPR comment])
+    DBT -->|✅ 30/30| OK([💬 Comment ✅<br/>on PR])
+    DBT -->|❌ fails| KO([🚫 Block<br/>merge])
+    TF  --> TP([💬 Plan in<br/>PR comment])
 
-    MERGE([🎉 Merge\nto main]) --> APPLY([🚀 terraform\napply])
+    MERGE([🎉 Merge<br/>to main]) --> APPLY([🚀 terraform<br/>apply])
 
     style PR    fill:#4A90D9,color:#fff,stroke:none
     style DC    fill:#E8A838,color:#000,stroke:none
@@ -902,23 +902,24 @@ Authentication uses Workload Identity Federation (configured in step 6 above) �
 ## ✅ Project Phases
 
 ```mermaid
-gantt
-    title Project Phases
-    dateFormat YYYY-MM-DD
-    section Infrastructure
-    Terraform + GCP + WIF + CI/CD     :done, 2024-11-01, 2024-11-10
-    section Ingestion
-    Python extractors + GCS Bronze    :done, 2024-11-10, 2024-11-20
-    section Orchestration
-    Airflow VM + DAGs + Variables     :done, 2024-11-20, 2024-12-01
-    section Processing
-    Silver layer + Parquet UTC        :done, 2024-12-01, 2024-12-10
-    section Warehouse
-    BigQuery + Partitioning           :done, 2024-12-10, 2024-12-20
-    section Transformation
-    dbt Gold + 30 tests + docs        :done, 2024-12-20, 2025-01-10
-    section Visualization
-    Looker Studio Dashboard           :done, 2025-01-10, 2025-01-20
+flowchart LR
+    P1["🏗️ 1. Infrastructure<br/>Terraform · GCP · WIF · CI/CD"]
+    P2["📥 2. Ingestion<br/>Python extractors · GCS Bronze"]
+    P3["⚙️ 3. Orchestration<br/>Airflow VM · DAGs · Variables"]
+    P4["🥈 4. Processing<br/>Silver layer · Parquet UTC"]
+    P5["🏭 5. Warehouse<br/>BigQuery · Partitioning"]
+    P6["🔄 6. Transformation<br/>dbt · 30 tests · docs"]
+    P7["📊 7. Visualization<br/>Looker Studio Dashboard"]
+
+    P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7
+
+    style P1 fill:#1E88E5,color:#fff,stroke:none
+    style P2 fill:#1E88E5,color:#fff,stroke:none
+    style P3 fill:#1E88E5,color:#fff,stroke:none
+    style P4 fill:#1E88E5,color:#fff,stroke:none
+    style P5 fill:#1E88E5,color:#fff,stroke:none
+    style P6 fill:#1E88E5,color:#fff,stroke:none
+    style P7 fill:#43A047,color:#fff,stroke:none
 ```
 
 | # | Phase | Description | Status |
