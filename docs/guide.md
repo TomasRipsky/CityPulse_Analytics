@@ -142,6 +142,17 @@ We request both (48 hours) and keep the hours whose New York date is the day we 
 > belongs to the neighbouring day. Verified against the live API on 2026-10-04, which is why the
 > request is made in UTC and the day is cut on our side with Python's `zoneinfo`.
 
+**Only finished days.** A New York day is ingested only once it is over (after the next local
+midnight). Before that, the API would answer with forecasts, and they would be stored as if they
+had been observed.
+
+**Hours are stamped at their end for some variables.** Temperature, humidity, cloud cover and
+wind speed are readings *at* the stamped instant. `precipitation`, `rain` and `snowfall` are the
+total of the **preceding** hour, and `wind_gusts_10m` its maximum: the value stamped 08:00 is what
+fell between 07:00 and 08:00. Bronze and Silver keep Open-Meteo's stamps untouched; the dbt models
+shift those four variables back one hour before summing them into days or joining them with the
+trips of that hour.
+
 ### Turning the answer into a table
 
 `openmeteo.to_table()` is also a small **contract**: it refuses an answer that is not what we
@@ -189,7 +200,9 @@ A month is 400–700 MB zipped and 2–5 million rows. Loading it whole into mem
 version 1 to add 4 GB of swap to its server. `citibike.convert()` instead uses
 `pyarrow.csv.open_csv`, a *streaming* reader: it decompresses and parses 16 MB of CSV at a time
 (~80,000 trips), converts that batch and hands it to a Parquet writer, then moves on. Memory depends
-on the block size, not on the month. Measured on January 2025: about a minute (mostly the
+on the block size and on one CSV (at most a million trips), not on the month: converting one
+1-million-row file peaks at about 0.4 GB and takes 1.5 seconds. Read-ahead threads are off: they
+saved no time here and cost ~100 MB. A whole January 2025 run takes about a minute (mostly the
 download), and the 395 MB ZIP becomes 97 MB of Parquet.
 
 Types are declared, never guessed: station ids are **strings** (most look like `6182.02`, but
@@ -203,7 +216,9 @@ Trip times are New York wall-clock readings with milliseconds and no offset
 the column is stored in UTC. Two readings a year have no single answer:
 
 - **Fall back** (`2025-11-02 01:30`, which happens twice): we take the first occurrence, daylight
-  time → `05:30 UTC` (`ambiguous="earliest"`). Trip data cannot tell the two apart.
+  time → `05:30 UTC` (`ambiguous="earliest"`). Trip data cannot tell the two apart — except when
+  the end time would then come before the start: a trip read as 01:55 → 01:10 started in daylight
+  time and ended in standard time, so its end takes the second occurrence (`06:10 UTC`).
 - **Spring forward** (`2025-03-09 02:30`, which never happens): we use the end of the gap,
   `03:00` daylight time → `07:00 UTC` (`nonexistent="latest"`).
 
@@ -224,12 +239,24 @@ Both are handled by one small file per period, the **manifest**
 
 ### Order of operations
 
-`ingest.ingest_day()` and `ingest.ingest_month()` always do the same four things:
+`ingest.ingest_day()` and `ingest.ingest_month()` work in two phases.
+
+**Prepare — on the local machine; nothing in the lake changes.** Fetch the response or download
+the ZIP, check it against the contract, build Silver, check the control totals. If anything is
+wrong — the month is not published, the API changed, a count does not match — the run stops here
+and the last good version in the lake is untouched.
+
+**Publish — only after prepare succeeded:**
 
 1. **delete** the old manifest — from now on the period is "not ready";
-2. write **Bronze** (the response or the ZIP, as received);
+2. write **Bronze** (the response body or the ZIP, exactly as received);
 3. write **Silver** (for trips: remove the month's old parts first, then one part per CSV);
 4. write the **manifest**, last.
+
+> **Problem we hit.** The first version of this code deleted the manifest and overwrote Bronze
+> *before* checking the new data. A re-run that failed — Citi Bike briefly answering 403, a
+> download that did not reconcile — would have destroyed a good month that could not be rebuilt
+> without the source. A code review caught it; the two-phase order and three tests now prevent it.
 
 Downstream steps only read periods that have a manifest. Writing one object is atomic on GCS
 (a reader sees the whole file or nothing), so the manifest turns "many files" into one
@@ -267,9 +294,14 @@ the CSV parser. If the parser produced a different number, ingestion stops with 
 ```
 
 Why not just count the Parquet rows? Because that counts our own output: a parser that skipped
-rows would agree with itself. The control total has to come from the source side. The warehouse
-load records the expected rows from the manifest next to the rows it actually loaded, and a test
-fails if they ever differ.
+rows would agree with itself. The control total has to come from the source side. The next step,
+the warehouse load, carries the same total forward: it records the expected rows from the
+manifest next to the rows it actually loaded, so a test can fail if they ever differ.
+
+The count is physical lines. A quoted value containing a newline would make the two numbers
+differ — and so would a parser that silently skipped a line — so the month stops with a
+`ReconciliationError` instead of loading something doubtful. Commas inside quoted station names
+are fine.
 
 Counting means reading each CSV twice (once to count, once to convert), about ten extra seconds
 per month — a cheap price for knowing the numbers are whole.
@@ -310,9 +342,10 @@ plain words with exit code 1.
   members out of order, macOS junk, blank stations, a `JC024` id, the repeated and the missing
   hour.
 - **Temporary lakes.** Every test that writes uses pytest's `tmp_path`.
-- **Each guard is shown to bite.** For the safety checks — deleting the old manifest first,
-  the reconciliation, removing stale parts, cleaning up `.part` files — the guard was removed once
-  and the matching test was watched turning red. A test that cannot fail proves nothing.
+- **Each guard is shown to bite.** For the safety checks — validating before publishing,
+  refusing unfinished days, deleting the old manifest first, the reconciliation, removing stale
+  parts, cleaning up `.part` files — the guard was removed once and the matching test was watched
+  turning red. A test that cannot fail proves nothing.
 
 Lint and formatting are `ruff` (`make lint`); `pre-commit` runs them, plus a secret scanner
 (gitleaks) and a guard against committing to `main` or `dev`, before every commit. CI runs lint

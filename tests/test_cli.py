@@ -79,3 +79,10 @@ def test_an_unpublished_month_exits_1_with_a_message(monkeypatch, tmp_path, caps
     monkeypatch.setattr(cli, "ingest_month", missing)
     assert cli.main(["ingest", "trips", "--from", "2030-01", "--lake", str(tmp_path)]) == 1
     assert "not published" in capsys.readouterr().err
+
+
+def test_the_lake_in_use_is_logged(monkeypatch, tmp_path, caplog):
+    monkeypatch.setattr(cli, "ingest_month", lambda month, lake, http, workdir: {"rows": 1})
+    with caplog.at_level("INFO", logger="citypulse"):
+        cli.main(["ingest", "trips", "--from", "2025-01", "--lake", str(tmp_path)])
+    assert f"lake: {tmp_path}" in caplog.text

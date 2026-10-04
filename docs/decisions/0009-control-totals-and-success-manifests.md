@@ -12,11 +12,14 @@ other risk: a reader cannot tell a finished folder from a half-written one.
 
 ## Decision
 Every ingested period ends with a **manifest**, written **last**, at
-`_manifests/<source>/<period>.json`:
+`_manifests/<source>/<period>.json`. Ingestion first *prepares* everything locally — fetch,
+validate, build Silver, check the totals — and only then *publishes*:
 
 1. delete the old manifest — the period is "not ready" while it is rewritten;
 2. write Bronze, then Silver;
 3. write the manifest.
+
+A run that fails while preparing leaves the last good version untouched.
 
 The manifest is the success marker (readers only trust periods that have one) **and** the
 control total: for trips, the rows of each CSV counted on the raw bytes (lines minus header),

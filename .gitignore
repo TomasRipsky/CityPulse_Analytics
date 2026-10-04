@@ -44,7 +44,10 @@ profiles.yml
 *.tfstate.*
 terraform.tfstate.d/
 
-# dbt
+# dbt (transformation/ until the dbt project moves to transform/)
+transformation/target/
+transformation/dbt_packages/
+transformation/logs/
 transform/target/
 transform/dbt_packages/
 transform/logs/

@@ -17,8 +17,13 @@ changes its clocks.
   requested day: 24 normally, **23** on the spring-forward Sunday, **25** on the fall-back Sunday.
 - **Trips:** read the local times and convert them with the IANA zone `America/New_York`
   (`pyarrow.compute.assume_timezone`). On the fall-back night the repeated hour is read as its
-  first occurrence (daylight time); a reading inside the spring-forward gap becomes 03:00
-  daylight time.
+  first occurrence (daylight time) unless the trip would then end before it started; a reading
+  inside the spring-forward gap becomes 03:00 daylight time.
+- **Interval variables:** Open-Meteo stamps `precipitation`, `rain`, `snowfall` (sums) and
+  `wind_gusts_10m` (maximum) at the **end** of the hour they cover. Bronze and Silver keep the
+  stamps; models shift these variables back one hour before building days or hourly joins.
+- A day is ingested only once it is over in New York, so forecasts are never stored as
+  observations.
 - Silver stores instants as `timestamp[us, tz=UTC]`; daily sources also carry `local_date`, the
   New York day. Daily and hourly models group by the New York calendar, never by the UTC date.
 

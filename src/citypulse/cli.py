@@ -79,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--to is before --from")
 
     lake, http = Lake(args.lake), Http()
+    log.info("lake: %s", args.lake)
     try:
         if args.source == "trips":
             with tempfile.TemporaryDirectory() as workdir:
