@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="720pt" height="273.6pt" viewBox="0 0 720 273.6" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-10-04T23:06:55.697851</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 273.6 
+L 720 273.6 
+L 720 0 
+L 0 0 
+z
+" style="fill: #fcfcfb"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 43.2 207.936 
+L 709.2 207.936 
+L 709.2 76.608 
+L 43.2 76.608 
+z
+" style="fill: #fcfcfb"/>
+   </g>
+   <g id="matplotlib.axis_1"/>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_1">
+      <path d="M 43.2 207.936 
+L 709.2 207.936 
+" clip-path="url(#pf881f03be3)" style="fill: none; stroke: #e1e0d9; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2"/>
+     <g id="text_1">
+      <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #898781" x="39.7" y="211.686" transform="rotate(-0 39.7 211.686)">0%</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_3">
+      <path d="M 43.2 175.104 
+L 709.2 175.104 
+" clip-path="url(#pf881f03be3)" style="fill: none; stroke: #e1e0d9; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4"/>
+     <g id="text_2">
+      <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #898781" x="39.7" y="178.854" transform="rotate(-0 39.7 178.854)">25%</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_5">
+      <path d="M 43.2 142.272 
+L 709.2 142.272 
+" clip-path="url(#pf881f03be3)" style="fill: none; stroke: #e1e0d9; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6"/>
+     <g id="text_3">
+      <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #898781" x="39.7" y="146.022" transform="rotate(-0 39.7 146.022)">50%</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_7">
+      <path d="M 43.2 109.44 
+L 709.2 109.44 
+" clip-path="url(#pf881f03be3)" style="fill: none; stroke: #e1e0d9; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8"/>
+     <g id="text_4">
+      <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #898781" x="39.7" y="113.19" transform="rotate(-0 39.7 113.19)">75%</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_9">
+      <path d="M 43.2 76.608 
+L 709.2 76.608 
+" clip-path="url(#pf881f03be3)" style="fill: none; stroke: #e1e0d9; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10"/>
+     <g id="text_5">
+      <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #898781" x="39.7" y="80.358" transform="rotate(-0 39.7 80.358)">100%</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 114.729231 207.936 
+L 125.363077 207.936 
+Q 128.021538 207.936 128.021538 205.056 
+L 128.021538 148.987344 
+Q 128.021538 146.107344 125.363077 146.107344 
+L 114.729231 146.107344 
+Q 112.070769 146.107344 112.070769 148.987344 
+L 112.070769 205.056 
+Q 112.070769 207.936 114.729231 207.936 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 112.070769 207.936 
+L 128.021538 207.936 
+L 128.021538 177.021672 
+L 112.070769 177.021672 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 242.806154 207.936 
+L 253.44 207.936 
+Q 256.098462 207.936 256.098462 205.056 
+L 256.098462 194.768653 
+Q 256.098462 191.888653 253.44 191.888653 
+L 242.806154 191.888653 
+Q 240.147692 191.888653 240.147692 194.768653 
+L 240.147692 205.056 
+Q 240.147692 207.936 242.806154 207.936 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 240.147692 207.936 
+L 256.098462 207.936 
+L 256.098462 199.912327 
+L 240.147692 199.912327 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 370.883077 207.936 
+L 381.516923 207.936 
+Q 384.175385 207.936 384.175385 205.056 
+L 384.175385 148.008247 
+Q 384.175385 145.128247 381.516923 145.128247 
+L 370.883077 145.128247 
+Q 368.224615 145.128247 368.224615 148.008247 
+L 368.224615 205.056 
+Q 368.224615 207.936 370.883077 207.936 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 368.224615 207.936 
+L 384.175385 207.936 
+L 384.175385 176.532124 
+L 368.224615 176.532124 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 498.96 207.936 
+L 509.593846 207.936 
+Q 512.252308 207.936 512.252308 205.056 
+L 512.252308 151.806676 
+Q 512.252308 148.926676 509.593846 148.926676 
+L 498.96 148.926676 
+Q 496.301538 148.926676 496.301538 151.806676 
+L 496.301538 205.056 
+Q 496.301538 207.936 498.96 207.936 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 496.301538 207.936 
+L 512.252308 207.936 
+L 512.252308 178.431338 
+L 496.301538 178.431338 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 627.036923 207.936 
+L 637.670769 207.936 
+Q 640.329231 207.936 640.329231 205.056 
+L 640.329231 103.134313 
+Q 640.329231 100.254313 637.670769 100.254313 
+L 627.036923 100.254313 
+Q 624.378462 100.254313 624.378462 103.134313 
+L 624.378462 205.056 
+Q 624.378462 207.936 627.036923 207.936 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 624.378462 207.936 
+L 640.329231 207.936 
+L 640.329231 154.095157 
+L 624.378462 154.095157 
+z
+" clip-path="url(#pf881f03be3)" style="fill: #2a78d6"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 43.2 207.936 
+L 709.2 207.936 
+" style="fill: none; stroke: #c3c2b7; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #0b0b0b" x="120.046154" y="140.298363" transform="rotate(-0 120.046154 140.298363)">47%</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(99.474279 223.464606)">Jan 2025</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(97.257091 232.961676)">1 of 3 files</text>
+   </g>
+   <g id="text_8">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #0b0b0b" x="248.123077" y="186.079673" transform="rotate(-0 248.123077 186.079673)">12%</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(226.720733 223.464606)">Nov 2025</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(225.334014 232.961676)">1 of 4 files</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #0b0b0b" x="376.2" y="139.319267" transform="rotate(-0 376.2 139.319267)">48%</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(354.797656 223.464606)">Dec 2025</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(353.410938 232.961676)">1 of 3 files</text>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #0b0b0b" x="504.276923" y="143.117695" transform="rotate(-0 504.276923 143.117695)">45%</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(483.705048 223.464606)">Jan 2026</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(481.487861 232.961676)">1 of 2 files</text>
+   </g>
+   <g id="text_14">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #0b0b0b" x="632.353846" y="94.445333" transform="rotate(-0 632.353846 94.445333)">82%</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(611.228065 223.464606)">Feb 2026</text>
+    <text style="font-size: 10px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(609.564784 232.961676)">1 of 2 files</text>
+   </g>
+  </g>
+  <g id="text_16">
+   <text style="font-weight: 700; font-size: 14px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="8.64" y="20.076" transform="rotate(-0 8.64 20.076)">Only 12–82% of each month's Citi Bike trips reached BigQuery</text>
+  </g>
+  <g id="text_17">
+   <text style="font-size: 10.5px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="8.64" y="39.339" transform="rotate(-0 8.64 39.339)">Each monthly ZIP holds 2–4 CSV files; the processor read just the first one listed in the archive.</text>
+  </g>
+  <g id="text_18">
+   <text style="font-size: 9px; font-family: 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #898781" x="8.64" y="266.13675" transform="rotate(-0 8.64 266.13675)">Share of uncompressed CSV bytes per month (≈ share of trips). ZIP listings read from s3://tripdata on 2026-10-04.</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pf881f03be3">
+   <rect x="43.2" y="76.608" width="666" height="131.328"/>
+  </clipPath>
+ </defs>
+</svg>

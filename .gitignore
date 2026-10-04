@@ -31,3 +31,6 @@ transformation/target/
 transformation/dbt_packages/
 transformation/logs/
 transformation/.user.yml
+# Logs
+logs/
+*.log

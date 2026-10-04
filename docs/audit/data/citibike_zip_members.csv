@@ -1,0 +1,15 @@
+month,order,member,uncompressed_bytes
+202501,0,202501-citibike-tripdata_1.csv,195009639
+202501,1,202501-citibike-tripdata_3.csv,24209588
+202501,2,202501-citibike-tripdata_2.csv,194993655
+202511,0,202511-citibike-tripdata_4.csv,81516504
+202511,1,202511-citibike-tripdata_1.csv,195669806
+202511,2,202511-citibike-tripdata_2.csv,194881617
+202511,3,202511-citibike-tripdata_3.csv,195045439
+202512,0,202512-citibike-tripdata_2.csv,195026164
+202512,1,202512-citibike-tripdata_3.csv,17847285
+202512,2,202512-citibike-tripdata_1.csv,194916912
+202601,0,202601-citibike-tripdata_2.csv,158985144
+202601,1,202601-citibike-tripdata_1.csv,194843701
+202602,0,202602-citibike-tripdata_1.csv,194851286
+202602,1,202602-citibike-tripdata_2.csv,42788284
