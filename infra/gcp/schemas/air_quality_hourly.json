@@ -1,0 +1,44 @@
+[
+  {
+    "name": "observed_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Instant of the reading, UTC."
+  },
+  {
+    "name": "local_date",
+    "type": "DATE",
+    "mode": "NULLABLE",
+    "description": "New York calendar day this hour belongs to (partition column)."
+  },
+  {
+    "name": "pm2_5",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Fine particulate matter (≤ 2.5 µm), µg/m³."
+  },
+  {
+    "name": "pm10",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Particulate matter (≤ 10 µm), µg/m³."
+  },
+  {
+    "name": "ozone",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Ozone, µg/m³."
+  },
+  {
+    "name": "nitrogen_dioxide",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Nitrogen dioxide, µg/m³."
+  },
+  {
+    "name": "us_aqi",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "US EPA Air Quality Index (0–500)."
+  }
+]
