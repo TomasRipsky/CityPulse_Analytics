@@ -1,0 +1,112 @@
+"""Land one period of one source in the lake: Bronze as received, Silver typed, manifest last.
+
+The manifest is the success marker: downstream steps only read periods that have one, so a run
+that dies halfway is invisible, and re-running a period is safe. It also carries the control
+totals — rows per source file, counted from the source bytes — that the warehouse load is
+reconciled against. Order of operations for every period:
+
+    1. delete the old manifest   (the period is "not ready" while it is rewritten)
+    2. write Bronze              (exactly what the source returned)
+    3. write Silver              (typed Parquet; for trips, every CSV, row counts checked)
+    4. write the manifest        (only now is the period visible)
+"""
+
+from __future__ import annotations
+
+import json
+import zipfile
+from datetime import UTC, date, datetime
+from pathlib import Path
+from typing import Any
+
+from citypulse import lake as paths
+from citypulse import openmeteo
+from citypulse.citibike import TRIP_SCHEMA, convert, count_rows, trip_members, zip_url
+from citypulse.http import Http
+from citypulse.lake import Lake
+
+
+class ReconciliationError(Exception):
+    """What was written does not match what the source holds."""
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def ingest_day(source: str, day: date, lake: Lake, http: Http, today: date) -> dict[str, Any]:
+    """Weather or air quality for one New York day."""
+    manifest_rel = paths.manifest_path(source, day.isoformat())
+    lake.delete(manifest_rel)
+
+    payload = openmeteo.fetch(source, day, http, today)
+    bronze, silver = paths.bronze_day(source, day), paths.silver_day(source, day)
+    lake.write_bytes(bronze, json.dumps(payload).encode())
+    table = openmeteo.to_table(source, payload, day)
+    with lake.parquet_writer(silver, table.schema) as writer:
+        writer.write_table(table)
+
+    manifest = {
+        "source": source,
+        "period": day.isoformat(),
+        "source_url": openmeteo.endpoint(source, day, today),
+        "extracted_at": _now(),
+        "rows": table.num_rows,
+        "null_counts": openmeteo.null_counts(table),
+        "bronze": bronze,
+        "silver": [silver],
+    }
+    lake.write_json(manifest_rel, manifest)
+    return manifest
+
+
+def ingest_month(month: date, lake: Lake, http: Http, workdir: Path) -> dict[str, Any]:
+    """Every Citi Bike trip CSV of one month (`month` = its first day)."""
+    manifest_rel = paths.manifest_path("citibike", f"{month:%Y-%m}")
+    lake.delete(manifest_rel)
+
+    url = zip_url(month)
+    local_zip = workdir / f"{month:%Y%m}-citibike-tripdata.zip"
+    try:
+        http.download(url, local_zip)
+        bronze = paths.bronze_trips(month)
+        lake.put_file(bronze, local_zip)
+        lake.delete_dir(paths.silver_trips_dir(month))
+        files, silver = _convert_all(local_zip, month, lake)
+    finally:
+        local_zip.unlink(missing_ok=True)
+
+    manifest = {
+        "source": "citibike",
+        "period": f"{month:%Y-%m}",
+        "source_url": url,
+        "extracted_at": _now(),
+        "rows": sum(f["rows"] for f in files),
+        "files": files,
+        "bronze": bronze,
+        "silver": silver,
+    }
+    lake.write_json(manifest_rel, manifest)
+    return manifest
+
+
+def _convert_all(local_zip: Path, month: date, lake: Lake) -> tuple[list[dict], list[str]]:
+    files, silver = [], []
+    with zipfile.ZipFile(local_zip) as zf:
+        members = trip_members(zf)
+        if not members:
+            raise ReconciliationError(f"{local_zip.name}: no trip CSV in the archive")
+        for index, info in enumerate(members):
+            expected = count_rows(zf, info)
+            part = paths.silver_trips_part(month, index)
+            with lake.parquet_writer(part, TRIP_SCHEMA) as writer:
+                written = convert(zf, info, month, writer)
+            if written != expected:
+                raise ReconciliationError(
+                    f"{info.filename}: source has {expected} rows, parsed {written}"
+                )
+            files.append(
+                {"name": info.filename, "rows": written, "uncompressed_bytes": info.file_size}
+            )
+            silver.append(part)
+    return files, silver
