@@ -1,0 +1,71 @@
+version: 2
+
+models:
+  - name: fct_city_day
+    description: >
+      One row per New York day: trips (null when the month was not loaded, 0 when nobody rode),
+      weather, air quality and calendar. Grain: local_date.
+    columns:
+      - name: local_date
+        data_tests: [unique, not_null]
+      - name: trips
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 400000}
+
+  - name: fct_city_hour
+    description: >
+      One row per hour with weather (hour_start, UTC): trips that started in it, weather for that
+      hour (interval variables already moved to the hour they describe), AQI. Grain: hour_start.
+    columns:
+      - name: hour_start
+        data_tests: [unique, not_null]
+
+  - name: mart_city_month
+    description: "Monthly summary for dashboards. Grain: month."
+    columns:
+      - name: month
+        data_tests: [unique, not_null]
+
+  - name: int_baselines
+    description: >
+      Expected trips: mean under dry conditions for the same month, kind of day and (hourly
+      baselines) hour, per rider. Grain: month × day_type × local_hour (null for daily) × rider.
+
+  - name: mart_condition_effects
+    description: >
+      Trips above or below what dry conditions would give, by condition (rain per hour; snow,
+      wind and air quality per day), band and rider. Grain: condition × band × rider.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["condition", "band", "rider"]
+
+  - name: mart_temperature_curve
+    description: "Trips per dry day by felt temperature (5 °C bands) and kind of day. Grain: band × day_type."
+
+  - name: mart_temperature_response
+    description: "% change in trips per °C warmer than usual for the month, per rider. Grain: rider."
+    columns:
+      - name: rider
+        data_tests: [unique, not_null]
+
+unit_tests:
+  - name: effect_is_actual_over_expected_minus_one
+    model: mart_condition_effects
+    given:
+      - input: ref('fct_city_hour')
+        rows:
+          - {trips_loaded: true, precipitation_mm: 2.0, snowfall_cm: 0, month: "2025-07-01", day_type: "workday", local_hour: 8, trips: 700, member_trips: 600, casual_trips: 100}
+      - input: ref('fct_city_day')
+        rows: []
+      - input: ref('int_baselines')
+        rows:
+          - {month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "all", expected_trips: 1000}
+          - {month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "member", expected_trips: 750}
+          - {month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "casual", expected_trips: 250}
+    expect:
+      rows:
+        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "all", trips: 700, expected_trips: 1000, effect_pct: -30.0}
+        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "member", trips: 600, expected_trips: 750, effect_pct: -20.0}
+        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "casual", trips: 100, expected_trips: 250, effect_pct: -60.0}
