@@ -1,0 +1,18 @@
+version: 2
+
+seeds:
+  - name: us_holidays
+    description: >
+      US federal holidays 2025–2026, including observed dates (2026-07-03 for Independence Day on
+      a Saturday). Generated once with the `holidays` package:
+      `uv run --with holidays==0.105 python -c "import holidays; ...holidays.US(years=[2025, 2026], observed=True)"`.
+      Grain: one row per holiday date.
+    config:
+      column_types:
+        date: date
+        holiday: string
+    columns:
+      - name: date
+        data_tests: [unique, not_null]
+      - name: holiday
+        data_tests: [not_null]

@@ -1,6 +1,6 @@
 locals {
   apis     = ["bigquery.googleapis.com", "storage.googleapis.com", "iam.googleapis.com", "iamcredentials.googleapis.com", "sts.googleapis.com"]
-  datasets = ["raw", "staging", "intermediate", "marts"]
+  datasets = ["raw", "staging", "intermediate", "marts", "audit"]
 
   # Raw tables: one partition per ingested period, so a load replaces exactly one partition.
   raw_tables = {

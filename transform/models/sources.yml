@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Tables loaded by `citypulse load` from the lake's Silver layer, one partition per ingested
+      period. Schemas are defined in infra/gcp/schemas/ (the contract with the Python code).
+    schema: raw
+    tables:
+      - name: weather_hourly
+        description: >
+          Open-Meteo hourly weather for New York. Grain: one row per hour; `observed_at` is a UTC
+          instant. precipitation, rain, snowfall and wind_gusts_10m cover the hour ENDING at
+          observed_at.
+      - name: air_quality_hourly
+        description: "Open-Meteo hourly air quality for New York. Grain: one row per hour."
+      - name: trips
+        description: >
+          Every Citi Bike trip, exactly as in the monthly source files (a trip can appear in two
+          months' files). Grain: one row per trip per source file.
+      - name: load_audit
+        description: >
+          One row per load: rows the lake manifest promised (counted at the source) and rows
+          BigQuery wrote. A period can be loaded more than once; the latest row is current.
