@@ -1,33 +1,58 @@
-# Terraform
-**/.terraform/
-*.tfstate
-*.tfstate.backup
-*.tfvars
-!*.tfvars.example
-.terraform.lock.hcl
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
 
 # Python
 __pycache__/
 *.py[cod]
-*.egg-info/
 .venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Local lake and scratch
+.lake/
+logs/
+*.log
+
+# Secrets & credentials — never commit
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+.envrc
+*.p8
+*.p12
+*.pfx
+# dbt: commit profiles.yml.example that uses env_var(); never the real one
+profiles.yml
 
-# GCP credentials — NUNCA subir al repo
-*.json
-service-account*.json
-gcp-key*.json
+# Terraform (keep .terraform.lock.hcl committed)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfstate.d/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# IDEs
-.vscode/
-.idea/
-
-# DBT
+# dbt (transformation/ until the dbt project moves to transform/)
 transformation/target/
 transformation/dbt_packages/
 transformation/logs/
-transformation/.user.yml
+transform/target/
+transform/dbt_packages/
+transform/logs/
+
+# Site
+site/node_modules/
+site/dist/
+site/src/.observablehq/cache/
