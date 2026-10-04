@@ -1,3 +1,5 @@
+> **v2 in progress on `dev`.** The code on this branch is being rebuilt; `main` holds the March 2026 version described below.
+
 # CityPulse Analytics 🌆
 
 > Pipeline de datos end-to-end que analiza cómo el clima y la calidad del aire
@@ -645,8 +647,8 @@ cp orchestration/dags/*.py ~/airflow/dags/prod/
 
 Convención de `dag_id`:
 ```python
-dag_id="prod.daily_ingestion"   # producción
-dag_id="dev.mi_nuevo_dag"       # desarrollo — siempre is_paused_upon_creation=True
+dag_id = "prod.daily_ingestion"  # producción
+dag_id = "dev.mi_nuevo_dag"  # desarrollo — siempre is_paused_upon_creation=True
 ```
 
 **Regla:** nunca editar archivos de `prod/` directamente en la VM.
