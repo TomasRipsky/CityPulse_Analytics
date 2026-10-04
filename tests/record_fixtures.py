@@ -20,10 +20,10 @@ def main() -> None:
     http = Http()
     for source in SOURCES:
         for day in DAYS:
-            data = fetch(source, day, http, today=date.today())
-            data.pop("generationtime_ms", None)  # changes on every call
+            raw = fetch(source, day, http, today=date.today())
             path = FIXTURES / f"{source}_{day}.json"
-            path.write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
+            path.write_bytes(raw)  # exactly as received, like Bronze
+            data = json.loads(raw)
             print(path.name, len(data["hourly"]["time"]), "hours")
 
 

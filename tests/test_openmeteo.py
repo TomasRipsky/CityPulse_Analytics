@@ -87,9 +87,9 @@ def test_fetch_asks_for_two_utc_days_in_unix_time():
     seen = {}
 
     class FakeHttp:
-        def get_json(self, url, params):
+        def get_bytes(self, url, params):
             seen.update(url=url, params=params)
-            return {}
+            return b"{}"
 
     openmeteo.fetch("weather", date(2025, 1, 31), FakeHttp(), today=date(2025, 6, 1))
     assert seen["url"] == openmeteo.ARCHIVE_URL

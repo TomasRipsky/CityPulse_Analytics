@@ -43,7 +43,7 @@ def test_ingest_days_runs_each_day(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli,
         "ingest_day",
-        lambda source, day, lake, http, today: seen.append((source, day)) or {"rows": 24},
+        lambda source, day, lake, http, now: seen.append((source, day)) or {"rows": 24},
     )
     code = cli.main(
         [

@@ -8,6 +8,7 @@ retried instead of producing a short file.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import random
@@ -60,6 +61,10 @@ class Http:
         self._sleep = sleep
 
     def get_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
+        return json.loads(self.get_bytes(url, params))
+
+    def get_bytes(self, url: str, params: dict[str, Any]) -> bytes:
+        """The response body, exactly as received (after transfer decoding)."""
         for attempt in range(1, self.max_attempts + 1):
             try:
                 response = self._client.get(url, params=params)
@@ -77,7 +82,7 @@ class Http:
                 )
                 continue
             response.raise_for_status()
-            return response.json()
+            return response.content
         raise AssertionError("unreachable")
 
     def download(self, url: str, dest: Path) -> int:

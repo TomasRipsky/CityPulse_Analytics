@@ -46,8 +46,8 @@ AIR_VARS = (
 INTEGER_VARS = frozenset({"weather_code", "us_aqi"})
 
 
-class JsonGetter(Protocol):
-    def get_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]: ...
+class BytesGetter(Protocol):
+    def get_bytes(self, url: str, params: dict[str, Any]) -> bytes: ...
 
 
 def variables(source: str) -> tuple[str, ...]:
@@ -65,8 +65,8 @@ def endpoint(source: str, day: date, today: date) -> str:
     return ARCHIVE_URL if day + timedelta(days=1) <= today - ARCHIVE_DELAY else FORECAST_URL
 
 
-def fetch(source: str, day: date, http: JsonGetter, today: date) -> dict[str, Any]:
-    """The raw response covering the New York day `day` (two UTC dates, hourly)."""
+def fetch(source: str, day: date, http: BytesGetter, today: date) -> bytes:
+    """The raw response body covering the New York day `day` (two UTC dates, hourly)."""
     params = {
         "latitude": LATITUDE,
         "longitude": LONGITUDE,
@@ -76,7 +76,7 @@ def fetch(source: str, day: date, http: JsonGetter, today: date) -> dict[str, An
         "end_date": (day + timedelta(days=1)).isoformat(),
         "hourly": ",".join(variables(source)),
     }
-    return http.get_json(endpoint(source, day, today), params)
+    return http.get_bytes(endpoint(source, day, today), params)
 
 
 def to_table(source: str, payload: dict[str, Any], day: date) -> pa.Table:
@@ -113,6 +113,11 @@ def to_table(source: str, payload: dict[str, Any], day: date) -> pa.Table:
 
 def null_counts(table: pa.Table) -> dict[str, int]:
     return {name: table[name].null_count for name in table.column_names}
+
+
+def day_end(day: date) -> datetime:
+    """The instant (UTC) when New York day `day` is over: the next local midnight."""
+    return _ny_midnight(day + timedelta(days=1))
 
 
 def _ny_midnight(day: date) -> datetime:

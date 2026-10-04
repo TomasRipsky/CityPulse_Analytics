@@ -22,7 +22,7 @@ import pyarrow.csv as csv
 
 BASE_URL = "https://s3.amazonaws.com/tripdata"
 TIMEZONE = "America/New_York"
-BLOCK_SIZE = 16 << 20  # bytes of CSV per batch: ~80k trips, a few tens of MB in memory
+BLOCK_SIZE = 16 << 20  # bytes of CSV per batch (~80k trips); peak memory stays ~0.4 GB per file
 
 CSV_TYPES = {
     "ride_id": pa.string(),
@@ -90,7 +90,8 @@ def convert(zf: zipfile.ZipFile, info: zipfile.ZipInfo, month: date, writer: Tab
     with zf.open(info) as handle:
         reader = csv.open_csv(
             handle,
-            read_options=csv.ReadOptions(block_size=BLOCK_SIZE),
+            # no read-ahead threads: same speed here, ~100 MB less peak memory
+            read_options=csv.ReadOptions(block_size=BLOCK_SIZE, use_threads=False),
             convert_options=csv.ConvertOptions(
                 column_types=CSV_TYPES,
                 include_columns=list(CSV_TYPES),

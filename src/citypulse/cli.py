@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from citypulse.http import Http, NotPublishedError
@@ -86,9 +86,9 @@ def main(argv: list[str] | None = None) -> int:
                     manifest = ingest_month(month, lake, http, Path(workdir))
                     log.info("trips %s: %d rows", f"{month:%Y-%m}", manifest["rows"])
         else:
-            source, today = DAY_SOURCES[args.source], date.today()
+            source, now = DAY_SOURCES[args.source], datetime.now(UTC)
             for day in days(args.start, end):
-                manifest = ingest_day(source, day, lake, http, today)
+                manifest = ingest_day(source, day, lake, http, now)
                 log.info("%s %s: %d rows", source, day, manifest["rows"])
     except NotPublishedError as exc:
         print(f"citypulse: not published at the source yet — {exc}", file=sys.stderr)
