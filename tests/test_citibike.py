@@ -132,3 +132,22 @@ def test_convert_of_an_empty_member_writes_nothing():
     rows, table = convert_all(zf, zf.getinfo("t_1.csv"))
     assert rows == 0
     assert table.num_rows == 0
+
+
+def test_a_trip_across_the_fall_back_hour_never_ends_before_it_starts():
+    # Starts 01:55 daylight time, ends 01:10 *standard* time (15 minutes later in real time).
+    zf = make_zip(
+        {"t_1.csv": csv_text(row("X", "2025-11-02 01:55:00.000", "2025-11-02 01:10:00.000"))}
+    )
+    _, table = convert_all(zf, zf.getinfo("t_1.csv"))
+    assert table["started_at"][0].as_py() == datetime(2025, 11, 2, 5, 55, tzinfo=UTC)
+    assert table["ended_at"][0].as_py() == datetime(2025, 11, 2, 6, 10, tzinfo=UTC)
+
+
+def test_a_trip_inside_the_repeated_hour_keeps_its_order():
+    zf = make_zip(
+        {"t_1.csv": csv_text(row("Y", "2025-11-02 01:10:00.000", "2025-11-02 01:40:00.000"))}
+    )
+    _, table = convert_all(zf, zf.getinfo("t_1.csv"))
+    assert table["started_at"][0].as_py() == datetime(2025, 11, 2, 5, 10, tzinfo=UTC)
+    assert table["ended_at"][0].as_py() == datetime(2025, 11, 2, 5, 40, tzinfo=UTC)

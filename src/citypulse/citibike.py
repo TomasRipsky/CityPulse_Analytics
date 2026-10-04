@@ -4,7 +4,8 @@ Every CSV in the archive is a slice of the month — the archive's own order is 
 read all of them, in name order. Each CSV is streamed in blocks to Parquet, so memory stays flat
 however large the month is. Trip times are New York wall-clock readings without an offset; they
 become UTC instants here (on the fall-back night the repeated hour is read as its first, daylight
-occurrence; a reading inside the spring-forward gap becomes 03:00 daylight time).
+occurrence — unless that would end a trip before it started; a reading inside the
+spring-forward gap becomes 03:00 daylight time).
 
 `count_rows` counts the lines of the raw CSV bytes, independently of the parser: it is the source's
 control total that the parser's output must match.
@@ -56,6 +57,12 @@ class TableWriter(Protocol):
     def write_table(self, table: pa.Table) -> None: ...
 
 
+def _to_utc(local: pa.Array, ambiguous: str) -> pa.Array:
+    """New York wall-clock readings → UTC instants (a gap reading becomes the end of the gap)."""
+    zoned = pc.assume_timezone(local, TIMEZONE, ambiguous=ambiguous, nonexistent="latest")
+    return zoned.cast(UTC_US)
+
+
 def zip_url(month: date) -> str:
     return f"{BASE_URL}/{month:%Y%m}-citibike-tripdata.zip"
 
@@ -102,11 +109,14 @@ def convert(zf: zipfile.ZipFile, info: zipfile.ZipInfo, month: date, writer: Tab
             if batch.num_rows == 0:
                 continue
             columns = {name: batch.column(name) for name in CSV_TYPES}
-            for name in ("started_at", "ended_at"):
-                local = pc.assume_timezone(
-                    columns[name], TIMEZONE, ambiguous="earliest", nonexistent="latest"
-                )
-                columns[name] = local.cast(UTC_US)
+            started = _to_utc(columns["started_at"], "earliest")
+            ended = _to_utc(columns["ended_at"], "earliest")
+            # A trip that ends after the clocks fell back reads e.g. 01:55 → 01:10: its end is
+            # the second (standard-time) 01:10, so take the later reading when the earlier one
+            # would end the trip before it started.
+            later = _to_utc(columns["ended_at"], "latest")
+            columns["started_at"] = started
+            columns["ended_at"] = pc.if_else(pc.less(ended, started), later, ended)
             columns["source_month"] = pa.repeat(pa.scalar(month, pa.date32()), batch.num_rows)
             columns["source_file"] = pa.repeat(pa.scalar(info.filename), batch.num_rows)
             writer.write_table(pa.Table.from_pydict(columns, schema=TRIP_SCHEMA))
