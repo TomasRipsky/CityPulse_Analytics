@@ -1,0 +1,106 @@
+version: 2
+
+models:
+  - name: stg_weather_hourly
+    description: >
+      Open-Meteo hourly weather for New York with unit-named columns. Grain: one row per
+      observed_at. Interval variables (precipitation_mm, rain_mm, snowfall_cm, wind_gusts_kmh)
+      cover the hour ending at observed_at.
+    columns:
+      - name: observed_at
+        description: Instant of the reading (UTC).
+        data_tests: [unique, not_null]
+      - name: local_date
+        description: New York calendar day of observed_at.
+        data_tests: [not_null]
+      - name: temperature_c
+        data_tests:
+          - in_range:
+              arguments: {min_value: -35, max_value: 45}
+      - name: apparent_temperature_c
+        data_tests:
+          - in_range:
+              arguments: {min_value: -50, max_value: 55}
+      - name: precipitation_mm
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 150}
+      - name: snowfall_cm
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 30}
+      - name: wind_gusts_kmh
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 200}
+      - name: humidity_pct
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 100}
+
+  - name: stg_air_quality_hourly
+    description: "Open-Meteo hourly air quality for New York. Grain: one row per observed_at."
+    columns:
+      - name: observed_at
+        data_tests: [unique, not_null]
+      - name: local_date
+        data_tests: [not_null]
+      - name: us_aqi
+        description: US EPA Air Quality Index.
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 500}
+
+  - name: stg_trips
+    description: >
+      One row per Citi Bike trip (ride_id), de-duplicated across source files, with New York day
+      and hour, duration and a plausibility flag (1 minute to 3 hours).
+    columns:
+      - name: ride_id
+        data_tests: [unique, not_null]
+      - name: started_at
+        description: Trip start (UTC).
+        data_tests: [not_null]
+      - name: start_hour
+        description: UTC hour the trip started in. New York's offset is a whole number of hours, so it is also the local hour (and keeps the two 01:00s of the fall-back night apart).
+      - name: start_date_local
+        description: New York calendar day the trip started on.
+        data_tests: [not_null]
+      - name: member_casual
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["member", "casual"]
+      - name: rideable_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["classic_bike", "electric_bike"]
+
+unit_tests:
+  - name: trips_keep_the_copy_from_the_latest_file
+    model: stg_trips
+    given:
+      - input: source('raw', 'trips')
+        rows:
+          - {ride_id: "A", started_at: "2025-01-31 23:50:00", ended_at: "2025-02-01 00:10:00", source_month: "2025-01-01", source_file: "jan_1.csv"}
+          - {ride_id: "A", started_at: "2025-01-31 23:50:00", ended_at: "2025-02-01 00:10:00", source_month: "2025-02-01", source_file: "feb_1.csv"}
+          - {ride_id: "B", started_at: "2025-02-10 12:00:00", ended_at: "2025-02-10 12:30:00", source_month: "2025-02-01", source_file: "feb_1.csv"}
+    expect:
+      rows:
+        - {ride_id: "A", source_file: "feb_1.csv"}
+        - {ride_id: "B", source_file: "feb_1.csv"}
+
+  - name: trips_get_new_york_day_and_hour_across_fall_back
+    model: stg_trips
+    given:
+      - input: source('raw', 'trips')
+        rows:
+          - {ride_id: "EDT", started_at: "2025-11-02 05:30:00", ended_at: "2025-11-02 05:40:00", source_month: "2025-11-01"}
+          - {ride_id: "EST", started_at: "2025-11-02 06:30:00", ended_at: "2025-11-02 06:40:00", source_month: "2025-11-01"}
+          - {ride_id: "LATE", started_at: "2025-11-03 04:30:00", ended_at: "2025-11-03 04:45:00", source_month: "2025-11-01"}
+    expect:
+      rows:
+        - {ride_id: "EDT", start_date_local: "2025-11-02", start_hour_local: 1, duration_min: 10.0, is_plausible: true}
+        - {ride_id: "EST", start_date_local: "2025-11-02", start_hour_local: 1, duration_min: 10.0, is_plausible: true}
+        - {ride_id: "LATE", start_date_local: "2025-11-02", start_hour_local: 23, duration_min: 15.0, is_plausible: true}
