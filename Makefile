@@ -1,4 +1,4 @@
-.PHONY: help setup test lint fmt ingest
+.PHONY: help setup test lint fmt ingest load
 
 # Local settings (never committed): copy .env.example to .env. Make exports every variable in it.
 -include .env
@@ -27,3 +27,6 @@ fmt: ## Auto-format and auto-fix
 
 ingest: ## Land data in the lake. Usage: make ingest ARGS="trips --from 2025-01"
 	uv run citypulse ingest $(ARGS)
+
+load: ## Load lake periods into BigQuery raw tables. Usage: make load ARGS="trips --from 2025-01"
+	uv run citypulse load $(ARGS)

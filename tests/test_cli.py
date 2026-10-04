@@ -86,3 +86,54 @@ def test_the_lake_in_use_is_logged(monkeypatch, tmp_path, caplog):
     with caplog.at_level("INFO", logger="citypulse"):
         cli.main(["ingest", "trips", "--from", "2025-01", "--lake", str(tmp_path)])
     assert f"lake: {tmp_path}" in caplog.text
+
+
+def test_load_runs_each_period_against_the_project(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(cli, "bigquery_client", lambda project: f"client:{project}")
+    monkeypatch.setattr(
+        cli,
+        "load_period",
+        lambda source, period, lake, client, project: (
+            seen.append((source, period, client)) or {"loaded_rows": 1}
+        ),
+    )
+    argv = [
+        "load",
+        "trips",
+        "--from",
+        "2025-11",
+        "--to",
+        "2026-01",
+        "--lake",
+        "gs://b",
+        "--project",
+        "p",
+    ]
+    assert cli.main(argv) == 0
+    assert seen == [
+        ("citibike", "2025-11", "client:p"),
+        ("citibike", "2025-12", "client:p"),
+        ("citibike", "2026-01", "client:p"),
+    ]
+
+
+def test_load_needs_a_project(monkeypatch):
+    monkeypatch.delenv("CITYPULSE_BQ_PROJECT", raising=False)
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["load", "weather", "--from", "2025-01-01", "--lake", "gs://b"])
+    assert exc.value.code == 2
+
+
+def test_load_of_a_missing_period_exits_1(monkeypatch, capsys):
+    from citypulse.warehouse import NotReadyError
+
+    monkeypatch.setattr(cli, "bigquery_client", lambda project: None)
+
+    def not_ready(*args):
+        raise NotReadyError("weather 2025-01-01: no manifest")
+
+    monkeypatch.setattr(cli, "load_period", not_ready)
+    argv = ["load", "weather", "--from", "2025-01-01", "--lake", "gs://b", "--project", "p"]
+    assert cli.main(argv) == 1
+    assert "not ingested" in capsys.readouterr().err
