@@ -27,7 +27,7 @@ LOAD_AUDIT_SCHEMA = pa.schema(
     [
         ("source", pa.string()),
         ("period", pa.string()),
-        ("partition", pa.string()),
+        ("partition_id", pa.string()),
         ("expected_rows", pa.int64()),
         ("loaded_rows", pa.int64()),
         ("files", pa.int64()),
@@ -94,7 +94,7 @@ def load_period(
     audit = {
         "source": source,
         "period": period,
-        "partition": partition,
+        "partition_id": partition,
         "expected_rows": manifest["rows"],
         "loaded_rows": job.output_rows,
         "files": len(manifest["silver"]),

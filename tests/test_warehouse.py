@@ -85,7 +85,7 @@ def test_a_month_replaces_its_own_partition(lake):
     assert config.source_format == bigquery.SourceFormat.PARQUET
     assert [f.name for f in config.schema] == ["x"]  # the table's own schema, never autodetected
     assert audit["expected_rows"] == audit["loaded_rows"] == 2124475
-    assert audit["partition"] == "202501" and audit["files"] == 2
+    assert audit["partition_id"] == "202501" and audit["files"] == 2
 
 
 def test_every_load_is_audited(lake):

@@ -52,12 +52,20 @@ resource "random_id" "pool" {
   byte_length = 2
 }
 
+# Right after the IAM API is enabled, creating a pool answers 403 for a minute or two.
+resource "time_sleep" "iam_propagation" {
+  count           = var.env == "dev" ? 1 : 0
+  create_duration = "90s"
+
+  depends_on = [google_project_service.apis]
+}
+
 resource "google_iam_workload_identity_pool" "github" {
   count                     = var.env == "dev" ? 1 : 0
   workload_identity_pool_id = "github-${random_id.pool[0].hex}"
   display_name              = "GitHub Actions"
 
-  depends_on = [google_project_service.apis]
+  depends_on = [time_sleep.iam_propagation]
 }
 
 resource "google_iam_workload_identity_pool_provider" "github" {

@@ -21,6 +21,8 @@ CITYPULSE_LAKE_URI := gs://$(PROJECT_ID)-lake
 endif
 CITYPULSE_LAKE_URI ?= .lake
 CITYPULSE_BQ_PROJECT ?= $(PROJECT_ID)
+# Google client libraries read the project from here (otherwise they warn they cannot find one).
+GOOGLE_CLOUD_PROJECT ?= $(PROJECT_ID)
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'

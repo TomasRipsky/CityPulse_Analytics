@@ -12,10 +12,10 @@
     "description": "Day (YYYY-MM-DD) or month (YYYY-MM) that was loaded."
   },
   {
-    "name": "partition",
+    "name": "partition_id",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "Partition replaced: YYYYMMDD or YYYYMM."
+    "description": "Partition replaced: YYYYMMDD or YYYYMM (`partition` is a reserved word in BigQuery SQL)."
   },
   {
     "name": "expected_rows",
