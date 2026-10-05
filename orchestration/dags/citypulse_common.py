@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import timedelta
+from datetime import date, timedelta
 
 from airflow.sdk import Asset
 
@@ -14,6 +14,12 @@ ENV = os.environ.get("CITYPULSE_ENV", "dev")
 PROJECT = os.environ["CITYPULSE_BQ_PROJECT"]
 LAKE = os.environ["CITYPULSE_LAKE_URI"]
 REVISION = os.environ.get("CITYPULSE_REVISION", "unknown")
+# A frozen dataset ends on this New York day; the DAGs then never schedule past it.
+LAST_DAY = (
+    date.fromisoformat(os.environ["CITYPULSE_LAST_DAY"])
+    if os.environ.get("CITYPULSE_LAST_DAY")
+    else None
+)
 
 VENV_BIN = "/opt/citypulse/.venv/bin"
 CLI = f"{VENV_BIN}/citypulse"

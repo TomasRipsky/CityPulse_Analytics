@@ -23,6 +23,8 @@ x-airflow-common:
     CITYPULSE_ENV: ${CITYPULSE_ENV:-dev}
     CITYPULSE_BQ_PROJECT: ${CITYPULSE_BQ_PROJECT:?set by make}
     CITYPULSE_LAKE_URI: ${CITYPULSE_LAKE_URI:?set by make}
+    # The frozen dataset's last New York day: no DAG schedules beyond it. Empty = keep running.
+    CITYPULSE_LAST_DAY: ${CITYPULSE_LAST_DAY:-}
     GOOGLE_CLOUD_PROJECT: ${CITYPULSE_BQ_PROJECT}
     GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp/adc.json
   volumes:

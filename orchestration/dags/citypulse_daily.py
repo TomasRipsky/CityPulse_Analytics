@@ -9,8 +9,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from airflow.sdk import dag, task
-from citypulse_common import CLI, DEFAULT_ARGS, LAKE, PROJECT, RAW, run_moment
-from citypulse_dates import ny_day_for_run
+from citypulse_common import CLI, DEFAULT_ARGS, LAKE, LAST_DAY, PROJECT, RAW, run_moment
+from citypulse_dates import last_daily_run, ny_day_for_run
 
 SOURCES = {"weather": "weather_hourly", "air-quality": "air_quality_hourly"}
 
@@ -19,6 +19,7 @@ SOURCES = {"weather": "weather_hourly", "air-quality": "air_quality_hourly"}
     dag_id="citypulse_daily",
     schedule="0 6 * * *",
     start_date=datetime(2025, 1, 2, tzinfo=UTC),
+    end_date=last_daily_run(LAST_DAY) if LAST_DAY else None,
     catchup=False,
     max_active_runs=16,
     default_args=DEFAULT_ARGS,

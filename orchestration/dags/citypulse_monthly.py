@@ -10,14 +10,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from airflow.sdk import dag, task
-from citypulse_common import CLI, DEFAULT_ARGS, LAKE, PROJECT, RAW, run_moment
-from citypulse_dates import trips_month_for_run
+from citypulse_common import CLI, DEFAULT_ARGS, LAKE, LAST_DAY, PROJECT, RAW, run_moment
+from citypulse_dates import last_monthly_run, trips_month_for_run
 
 
 @dag(
     dag_id="citypulse_monthly",
     schedule="0 6 15 * *",
     start_date=datetime(2025, 3, 15, tzinfo=UTC),
+    end_date=last_monthly_run(LAST_DAY) if LAST_DAY else None,
     catchup=False,
     max_active_runs=2,
     default_args=DEFAULT_ARGS,

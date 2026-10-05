@@ -57,7 +57,9 @@ transform: transform/profiles.yml ## Build and test the dbt models in ENV's BigQ
 	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir . $(ARGS)
 
 GIT_REVISION := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD -- . ':!.internal' || echo -dirty)
-COMPOSE := CITYPULSE_ENV=$(ENV) CITYPULSE_BQ_PROJECT=$(PROJECT_ID) CITYPULSE_LAKE_URI=gs://$(PROJECT_ID)-lake \
+# The frozen dataset: January 2025 to August 2026 (the last month Citi Bike had published).
+CITYPULSE_LAST_DAY ?= 2026-08-31
+COMPOSE := CITYPULSE_ENV=$(ENV) CITYPULSE_BQ_PROJECT=$(PROJECT_ID) CITYPULSE_LAKE_URI=gs://$(PROJECT_ID)-lake CITYPULSE_LAST_DAY=$(CITYPULSE_LAST_DAY) \
 	docker compose -p citypulse-$(ENV) -f orchestration/docker-compose.yaml
 
 airflow-build: ## Build the Airflow image for ENV from this commit (the deployed version)

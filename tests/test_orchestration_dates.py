@@ -24,3 +24,11 @@ def test_a_monthly_run_loads_trips_two_months_back():
     assert trips_month_for_run(datetime(2025, 3, 15, 6, 0, tzinfo=UTC)) == date(2025, 1, 1)
     assert trips_month_for_run(datetime(2026, 1, 15, 6, 0, tzinfo=UTC)) == date(2025, 11, 1)
     assert trips_month_for_run(datetime(2026, 2, 15, 6, 0, tzinfo=UTC)) == date(2025, 12, 1)
+
+
+def test_last_runs_cover_the_last_day_and_month_exactly():
+    from citypulse_dates import last_daily_run, last_monthly_run
+
+    last = date(2026, 8, 31)
+    assert ny_day_for_run(last_daily_run(last)) == last
+    assert trips_month_for_run(last_monthly_run(last)) == date(2026, 8, 1)
