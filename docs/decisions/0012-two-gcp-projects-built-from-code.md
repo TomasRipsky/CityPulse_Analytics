@@ -17,14 +17,17 @@ Its Terraform state lived inside the bucket it managed. None of it could be rebu
   inside it by Terraform (`infra/gcp/`, one workspace per environment, local state: only one
   person applies it).
 - One service account, **`citypulse-pipeline`**: object admin on the lake bucket, data editor on
-  the four datasets, BigQuery job user. Nothing on IAM. Every binding is in Terraform.
+  the datasets, BigQuery job user; in dev also BigQuery user, so CI can create (and own) its
+  per-run datasets. Nothing on IAM. Every binding is in Terraform.
 - People run the pipeline **as** that account (impersonation through
   `iam.serviceAccountTokenCreator`), never with their own broader rights and never with a key —
-  the organisation forbids keys anyway.
+  the organisation forbids keys anyway. Terraform alone runs with the operator's own login token,
+  because it manages IAM.
 - **Workload Identity Federation only in dev**, only for this repository's `citypulse-*`
-  workflows, never for `pull_request_target`. Nothing in CI touches prod, so prod trusts no one
-  outside.
-- A daily BigQuery query quota (100 GiB) stops runaway scans, which a budget alert only reports.
+  workflows and only for `pull_request`, `push` and `workflow_dispatch` events (an allowlist).
+  Nothing in CI touches prod, so prod trusts no one outside.
+- A daily BigQuery query quota (10 GiB dev, 50 GiB prod) stops runaway scans, which a budget alert
+  only reports; together they cap a month near the free TiB plus the budget.
 
 ## Alternatives considered
 - One project with CI datasets — cheaper to set up, but pull-request code could read and write
@@ -33,7 +36,8 @@ Its Terraform state lived inside the bucket it managed. None of it could be rebu
 - Federation in prod for a scheduled pipeline — the dataset is frozen; nothing runs on a schedule.
 
 ## Consequences
-- `make destroy` / `make apply` rebuild an environment from nothing (tested on dev).
+- `make destroy` / `make apply` rebuild an environment from nothing (tested on prod with data in
+  the lake and the warehouse: 25 resources destroyed in 44 s, then re-created).
 - The local state file must not be lost; losing it means importing or re-creating resources.
 - Right after the IAM API is enabled, creating a federation pool fails with 403 for a minute or
   two; Terraform waits 90 seconds before creating it.

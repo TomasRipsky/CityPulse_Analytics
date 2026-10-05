@@ -72,6 +72,13 @@ resource "google_bigquery_table" "load_audit" {
   description         = "One row per load: rows the lake manifest promised and rows BigQuery wrote."
   schema              = file("${path.module}/schemas/load_audit.json")
   deletion_protection = false
+
+  # Every load appends one row. An unpartitioned table accepts 1,500 modifications a day — fewer
+  # than a full backfill (~1,240 loads) plus a retry; a partitioned one accepts 30,000.
+  time_partitioning {
+    type  = "MONTH"
+    field = "loaded_at"
+  }
 }
 
 # A budget alert only warns; this quota stops runaway queries.
@@ -80,7 +87,7 @@ resource "google_service_usage_consumer_quota_override" "bigquery_query_per_day"
   service        = "bigquery.googleapis.com"
   metric         = urlencode("bigquery.googleapis.com/quota/query/usage")
   limit          = urlencode("/d/project")
-  override_value = var.query_quota_mib_per_day
+  override_value = var.query_quota_mib_per_day[var.env]
   force          = true
 
   depends_on = [google_project_service.apis]

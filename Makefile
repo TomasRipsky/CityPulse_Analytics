@@ -1,4 +1,4 @@
-.PHONY: help setup test lint fmt ingest load bootstrap init plan apply destroy gh-vars
+.PHONY: help setup test lint fmt ingest load bootstrap operator-check init plan apply destroy gh-vars
 
 # Local settings (never committed): copy .env.example to .env. Make exports every variable in it.
 -include .env
@@ -9,7 +9,9 @@ PROJECT_PREFIX ?= citypulse-tr
 PROJECT_ID := $(PROJECT_PREFIX)-$(ENV)
 # Budget alert amount, in the billing account's currency (EUR for this account).
 BUDGET_AMOUNT ?= 5
-TF := terraform -chdir=infra/gcp
+# Terraform runs with the operator's own login (it manages IAM), even when ADC impersonates the
+# pipeline account for everything else.
+TF := GOOGLE_OAUTH_ACCESS_TOKEN=$$(gcloud auth print-access-token) terraform -chdir=infra/gcp
 
 ifeq ($(filter $(ENV),dev prod),)
 $(error ENV must be dev or prod, got '$(ENV)')
@@ -62,15 +64,19 @@ init:
 	$(TF) init -input=false
 	$(TF) workspace select -or-create $(ENV)
 
-TF_VARS = -var env=$(ENV) -var project_id=$(PROJECT_ID) -var operator="user:$$(gcloud config get account 2>/dev/null)"
+OPERATOR_ACCOUNT := $(shell gcloud config get account 2>/dev/null)
+TF_VARS = -var env=$(ENV) -var project_id=$(PROJECT_ID) -var operator="user:$(OPERATOR_ACCOUNT)"
 
-plan: init ## Show infrastructure changes for ENV
+operator-check:
+	@test -n "$(OPERATOR_ACCOUNT)" || { echo "no active gcloud account: run gcloud auth login"; exit 1; }
+
+plan: operator-check init ## Show infrastructure changes for ENV
 	$(TF) plan $(TF_VARS)
 
-apply: init ## Create/update ENV's infrastructure (expected cost: ~€0/month dev, cents prod)
+apply: operator-check init ## Create/update ENV's infrastructure (expected cost: ~€0/month dev, cents prod)
 	$(TF) apply $(TF_VARS)
 
-destroy: init ## Delete everything Terraform created in ENV — lake and tables included
+destroy: operator-check init ## Delete everything Terraform created in ENV — lake and tables included
 	$(TF) destroy $(TF_VARS)
 
 gh-vars: init ## Publish dev's project, WIF provider and service account to the GitHub environment dev

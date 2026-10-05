@@ -408,8 +408,10 @@ Details that matter:
 - **`force_destroy` and `delete_contents_on_destroy`:** everything in the lake and the warehouse
   can be rebuilt from the public sources, so `make destroy` is allowed to delete it with its data.
   A teardown that stops on a non-empty bucket is a teardown nobody runs.
-- **Query quota:** at most 100 GiB scanned per day per project. BigQuery bills by bytes scanned
-  (the first TiB each month is free); the quota is the hard stop the budget is not.
+- **Query quota:** at most 10 GiB (dev) and 50 GiB (prod) scanned per day. BigQuery bills by
+  bytes scanned and the first TiB a month is free for the whole billing account; the two quotas
+  cap a month at about 1.8 TiB — the free TiB plus roughly the €5 the budgets watch. The budget
+  warns; the quota stops.
 - **State.** Terraform remembers what it created in a *state* file. Here it stays on the
   operator's machine, one *workspace* per environment (`terraform.tfstate.d/dev/`), git-ignored.
   Shared remote state is only worth it when several people or machines apply.
@@ -418,13 +420,13 @@ Details that matter:
 
 | Identity | Can | Cannot |
 |---|---|---|
-| `citypulse-pipeline` (service account) | read/write the lake bucket; read/write tables in the 4 datasets; run BigQuery jobs | anything about IAM, other buckets, other projects |
+| `citypulse-pipeline` (service account) | read/write the lake bucket; read/write tables in the datasets; run BigQuery jobs; in dev also create datasets (CI's per-run ones, which it then owns) | anything about IAM, other buckets, other projects |
 | the operator (you) | impersonate the pipeline account | — (as owner of the project you can do more, but the pipeline does not run with it) |
 | GitHub Actions, dev only | become the pipeline account, from this repo's `citypulse-*` workflows | anything in prod; `pull_request_target` runs |
 
 *Impersonation* means a person asks Google for a short-lived token **of the service account**.
-Set it up once per machine; every Google client library on it (Python, Terraform, Airflow) then
-acts as the pipeline:
+Set it up once per machine; the Google client libraries on it (the `citypulse` CLI, dbt, Airflow)
+then act as the pipeline:
 
 ```bash
 gcloud auth application-default login \
@@ -432,7 +434,9 @@ gcloud auth application-default login \
 ```
 
 Running locally with that token is the honest test of least privilege: if the account lacks a
-permission, your laptop run fails the same way CI would. The organisation forbids service-account
+permission, your laptop run fails the same way CI would. Terraform is the exception: it creates
+service accounts and IAM bindings, which the pipeline must never be able to do, so `make` hands it
+your own gcloud login token (`GOOGLE_OAUTH_ACCESS_TOKEN`) instead of ADC. The organisation forbids service-account
 keys, so there is no key file anywhere.
 
 GitHub Actions gets in through **Workload Identity Federation**: each workflow run receives a
@@ -440,8 +444,9 @@ signed OIDC token from GitHub saying which repository, workflow and event it is;
 that token against the pool's *attribute condition* and swaps it for a short-lived token of the
 pipeline account. The condition here admits only this repository (by its immutable numeric id —
 a renamed or re-created repository gets a new one), only workflow files named `citypulse-*`,
-and never `pull_request_target` (an event that runs with the base repository's identity on code
-from a fork).
+and only the events CI uses — `pull_request`, `push`, `workflow_dispatch`. It is an allowlist:
+a future workflow triggered by `issue_comment`, `workflow_run` or `pull_request_target` (which runs
+with the base repository's identity on code from a fork) gets nothing.
 
 > **Problem we hit.** The first `make apply` failed with `403 Permission
 > 'iam.workloadIdentityPools.create' denied` — for the project owner. The IAM API had been
@@ -485,14 +490,22 @@ table — which Terraform created from `infra/gcp/schemas/` — and is never gue
 A test (`tests/test_schemas.py`) compares those JSON schemas with what the Python code writes, so
 the two cannot drift apart unnoticed.
 
-After the job, a row goes into `raw.load_audit`:
+Before the job, the loader adds up the row counts stored in the footers of the Parquet files (a
+few bytes each; no data is read) and compares them with the manifest. A mismatch stops the load
+before the table is touched, so a good partition is never replaced by doubtful files.
+
+After a completed job, a row goes into `raw.load_audit`:
 
 | source | period | partition_id | expected_rows | loaded_rows | files | manifest_extracted_at | loaded_at |
 |---|---|---|---|---|---|---|---|
 | citibike | 2025-01 | 202501 | 2124475 | 2124475 | 3 | … | … |
 
 `expected_rows` is the manifest's count, which came from the source bytes; `loaded_rows` is what
-BigQuery says it wrote. If they differ, the row is still recorded and the command fails. The
+BigQuery says it wrote. If they ever differed — the files were checked first, so this would mean
+BigQuery read them differently — the new partition is already in place: the row is still recorded,
+the command fails, and the dbt integrity test fails until the period is reloaded. `load_audit` is
+itself partitioned by month: an unpartitioned table accepts 1,500 changes a day, fewer than a full
+backfill plus a retry. The
 chain is complete: source file → manifest → load job → audit row, each step counting the same
 rows.
 

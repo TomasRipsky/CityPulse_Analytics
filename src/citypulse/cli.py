@@ -41,7 +41,7 @@ def months(start: date, end: date) -> list[date]:
 
 
 def bigquery_client(project: str):
-    from google.cloud import bigquery  # imported here: `ingest` works without the BigQuery client
+    from google.cloud import bigquery
 
     return bigquery.Client(project=project)
 
@@ -95,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--to is before --from")
     if args.command == "load" and not args.project:
         parser.error("load needs --project or $CITYPULSE_BQ_PROJECT")
+    if args.command == "load" and not args.lake.startswith("gs://"):
+        parser.error("load reads from GCS: --lake (or $CITYPULSE_LAKE_URI) must be gs://<bucket>")
 
     source, monthly = SOURCES[args.source], args.source == "trips"
     periods = months(args.start, end) if monthly else days(args.start, end)

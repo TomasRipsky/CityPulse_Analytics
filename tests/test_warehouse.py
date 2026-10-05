@@ -45,7 +45,14 @@ class FakeBigQuery:
         return SimpleNamespace(result=lambda: None)
 
 
-def write_manifest(lake, source, period, rows, silver):
+def write_manifest(lake, source, period, rows, silver, write_files=True):
+    if write_files:  # Silver files holding exactly `rows`, spread over the parts
+        import pyarrow as pa
+
+        for i, rel in enumerate(silver):
+            n = rows // len(silver) + (rows % len(silver) if i == 0 else 0)
+            with lake.parquet_writer(rel, pa.schema([("x", pa.int64())])) as writer:
+                writer.write_table(pa.table({"x": list(range(n))}))
     lake.write_json(
         paths.manifest_path(source, period),
         {
@@ -74,8 +81,8 @@ def test_a_month_replaces_its_own_partition(lake):
         "silver/citibike/month=2025-01/part-000.parquet",
         "silver/citibike/month=2025-01/part-001.parquet",
     ]
-    write_manifest(lake, "citibike", "2025-01", 2124475, silver)
-    client = FakeBigQuery(output_rows=2124475)
+    write_manifest(lake, "citibike", "2025-01", 2125, silver)
+    client = FakeBigQuery(output_rows=2125)
     audit = load_period("citibike", "2025-01", lake, client, PROJECT)
 
     ((uris, destination, config),) = client.uri_loads
@@ -84,7 +91,7 @@ def test_a_month_replaces_its_own_partition(lake):
     assert config.write_disposition == bigquery.WriteDisposition.WRITE_TRUNCATE
     assert config.source_format == bigquery.SourceFormat.PARQUET
     assert [f.name for f in config.schema] == ["x"]  # the table's own schema, never autodetected
-    assert audit["expected_rows"] == audit["loaded_rows"] == 2124475
+    assert audit["expected_rows"] == audit["loaded_rows"] == 2125
     assert audit["partition_id"] == "202501" and audit["files"] == 2
 
 
@@ -125,3 +132,16 @@ def test_a_local_lake_cannot_be_loaded(tmp_path):
     )
     with pytest.raises(ValueError, match="gs://"):
         load_period("weather", "2025-01-15", lake, FakeBigQuery(24), PROJECT)
+
+
+def test_silver_that_does_not_match_the_manifest_is_never_loaded(lake):
+    import pyarrow as pa
+
+    rel = "silver/weather/date=2025-01-15/part.parquet"
+    with lake.parquet_writer(rel, pa.schema([("x", pa.int64())])) as writer:
+        writer.write_table(pa.table({"x": list(range(23))}))
+    write_manifest(lake, "weather", "2025-01-15", 24, [rel], write_files=False)  # promised 24
+    client = FakeBigQuery(output_rows=23)
+    with pytest.raises(ReconciliationError, match="23"):
+        load_period("weather", "2025-01-15", lake, client, PROJECT)
+    assert client.uri_loads == []  # the old partition was never touched

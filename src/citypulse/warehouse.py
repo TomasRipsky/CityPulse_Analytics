@@ -3,8 +3,9 @@
 Each period (a day, or a month of trips) owns one partition of its table. A load replaces that
 partition in a single job — `WRITE_TRUNCATE` on the partition decorator `table$YYYYMMDD` — so a
 re-run never duplicates rows and a failed job leaves the old partition as it was. Only periods with
-a manifest are loaded, and every load appends to `raw.load_audit` how many rows the manifest
-promised and how many BigQuery wrote.
+a manifest are loaded; the Silver files are checked against the manifest's row count before the
+job, and every completed load appends to `raw.load_audit` how many rows the manifest promised and
+how many BigQuery wrote.
 """
 
 from __future__ import annotations
@@ -77,6 +78,14 @@ def load_period(
     if not lake.exists(manifest_rel):
         raise NotReadyError(f"{source} {period}: no manifest in {lake.uri} (not ingested yet?)")
     manifest = lake.read_json(manifest_rel)
+    # Check the files against the manifest before touching the table: a mismatch must never
+    # replace a good partition.
+    silver_rows = sum(lake.parquet_rows(rel) for rel in manifest["silver"])
+    if silver_rows != manifest["rows"]:
+        raise ReconciliationError(
+            f"{source} {period}: manifest has {manifest['rows']} rows, "
+            f"Silver files hold {silver_rows}"
+        )
 
     table_id = f"{project}.{DATASET}.{TABLES[source]}"
     partition = partition_id(source, period)
@@ -107,10 +116,7 @@ def load_period(
         job_config=bigquery.LoadJobConfig(
             source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
             write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
-            schema=[
-                bigquery.SchemaField.from_api_repr(f)
-                for f in bq_schema_from_arrow(LOAD_AUDIT_SCHEMA)
-            ],
+            schema=client.get_table(f"{project}.{DATASET}.load_audit").schema,
         ),
     ).result()
     if job.output_rows != manifest["rows"]:

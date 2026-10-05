@@ -137,3 +137,12 @@ def test_load_of_a_missing_period_exits_1(monkeypatch, capsys):
     argv = ["load", "weather", "--from", "2025-01-01", "--lake", "gs://b", "--project", "p"]
     assert cli.main(argv) == 1
     assert "not ingested" in capsys.readouterr().err
+
+
+def test_load_from_a_local_lake_is_a_usage_error(monkeypatch):
+    monkeypatch.setattr(
+        cli, "bigquery_client", lambda project: pytest.fail("no client for a usage error")
+    )
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["load", "weather", "--from", "2025-01-01", "--lake", ".lake", "--project", "p"])
+    assert exc.value.code == 2

@@ -80,11 +80,14 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   }
 
   # Without a condition any GitHub repository could exchange tokens here. Only this repository's
-  # citypulse-* workflows qualify, and never pull_request_target (it runs with base-repo claims).
+  # citypulse-* workflows qualify, and only for the events CI uses — an allowlist, so a future
+  # workflow on issue_comment, workflow_run or pull_request_target (which runs with the base
+  # repository's identity on fork code) gets nothing. workflow_ref names the calling workflow file;
+  # add a job_workflow_ref check if reusable workflows are ever called.
   attribute_condition = join(" && ", [
     "assertion.repository_id == '${var.github_repository_id}'",
     "assertion.workflow_ref.startsWith('${var.github_repository}/.github/workflows/citypulse-')",
-    "assertion.event_name != 'pull_request_target'",
+    "assertion.event_name in ['pull_request', 'push', 'workflow_dispatch']",
   ])
 
   oidc {

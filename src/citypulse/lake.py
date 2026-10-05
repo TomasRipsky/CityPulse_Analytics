@@ -92,6 +92,11 @@ class Lake:
     def parquet_writer(self, rel: str, schema: pa.Schema) -> pq.ParquetWriter:
         return pq.ParquetWriter(self._prepare(rel), schema, filesystem=self._fs)
 
+    def parquet_rows(self, rel: str) -> int:
+        """Rows in a Parquet file, from its footer only (no data is read)."""
+        with self._fs.open_input_file(self._path(rel)) as handle:
+            return pq.ParquetFile(handle).metadata.num_rows
+
     def read_table(self, rel: str) -> pa.Table:
         # Through a file handle so pyarrow does not add hive partition columns from the path.
         with self._fs.open_input_file(self._path(rel)) as handle:

@@ -38,7 +38,10 @@ variable "operator" {
 }
 
 variable "query_quota_mib_per_day" {
-  description = "Hard cap on BigQuery bytes scanned per day in this project, in MiB."
-  type        = number
-  default     = 102400
+  description = "Hard cap on BigQuery bytes scanned per day, in MiB, per environment. Together (60 GiB/day) they cap a month at ~1.8 TiB: the free 1 TiB plus ~5 € — the budget's size."
+  type        = map(number)
+  default = {
+    dev  = 10240 # 10 GiB: CI builds on a two-month sample
+    prod = 51200 # 50 GiB: a full dbt build scans the trips table twice (~10 GB each)
+  }
 }
