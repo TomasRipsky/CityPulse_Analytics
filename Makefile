@@ -1,4 +1,4 @@
-.PHONY: help setup test lint fmt ingest load transform bootstrap operator-check init plan apply destroy gh-vars
+.PHONY: help setup test lint fmt ingest load transform airflow-build airflow-up airflow-down airflow-dags bootstrap operator-check init plan apply destroy gh-vars
 
 # Local settings (never committed): copy .env.example to .env. Make exports every variable in it.
 -include .env
@@ -55,6 +55,23 @@ transform/profiles.yml: transform/profiles.yml.example
 
 transform: transform/profiles.yml ## Build and test the dbt models in ENV's BigQuery. Usage: make transform ENV=dev [ARGS="-s staging"]
 	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir . $(ARGS)
+
+GIT_REVISION := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD -- . ':!.internal' || echo -dirty)
+COMPOSE := CITYPULSE_ENV=$(ENV) CITYPULSE_BQ_PROJECT=$(PROJECT_ID) CITYPULSE_LAKE_URI=gs://$(PROJECT_ID)-lake \
+	docker compose -p citypulse-$(ENV) -f orchestration/docker-compose.yaml
+
+airflow-build: ## Build the Airflow image for ENV from this commit (the deployed version)
+	docker build -f orchestration/Dockerfile --build-arg GIT_REVISION=$(GIT_REVISION) -t citypulse-airflow:$(ENV) .
+
+airflow-up: airflow-build ## Start Airflow for ENV on http://127.0.0.1:8080 (uses your gcloud ADC)
+	$(COMPOSE) up -d --wait
+
+airflow-down: ## Stop Airflow for ENV (keeps its metadata database)
+	$(COMPOSE) down
+
+airflow-dags: ## List the DAGs Airflow parsed, and any import errors
+	$(COMPOSE) exec airflow-scheduler airflow dags list
+	$(COMPOSE) exec airflow-scheduler airflow dags list-import-errors
 
 bootstrap: ## One-off per ENV: create the project in the org, link billing, budget alert. BILLING_ACCOUNT=… ORG_ID=…
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }
