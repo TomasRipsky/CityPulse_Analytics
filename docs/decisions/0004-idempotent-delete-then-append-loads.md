@@ -1,6 +1,6 @@
 # 0004 — Idempotent loads: delete the period, then append
 
-- **Status:** Accepted
+- **Status:** Superseded by [0013](0013-atomic-partition-loads-with-audit.md)
 - **Date:** 2026-03-07 (recorded retroactively on 2026-10-04)
 
 ## Context

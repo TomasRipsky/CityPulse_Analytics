@@ -14,6 +14,8 @@ but has not seen this project. The README says *what* and *how to run*; this fil
 5. [Control totals and the success manifest](#5-control-totals-and-the-success-manifest)
 6. [Talking to the internet: retries and downloads](#6-talking-to-the-internet-retries-and-downloads)
 7. [How the code is tested](#7-how-the-code-is-tested)
+8. [The cloud: projects, Terraform and identities](#8-the-cloud-projects-terraform-and-identities)
+9. [Loading the warehouse](#9-loading-the-warehouse)
 
 ---
 
@@ -355,3 +357,159 @@ and tests on every pull request.
 a local lake on 2026-10-04: 9 March 2025 weather (23 hours), 2 November 2025 air quality
 (25 hours) and January 2025 trips — 2,124,475 rows from three CSVs, equal to the raw line count,
 every `ride_id` unique.
+
+---
+
+## 8. The cloud: projects, Terraform and identities
+
+Everything in Google Cloud is created from this repository
+([decision 0012](decisions/0012-two-gcp-projects-built-from-code.md)). Nothing is clicked in the
+console, so the whole environment can be destroyed and rebuilt.
+
+### Two projects
+
+| Project | Holds | Used by |
+|---|---|---|
+| `citypulse-tr-dev` | a sample: January and July 2025, both daylight-saving weekends | CI, which builds every pull request's dbt models here |
+| `citypulse-tr-prod` | the full dataset, January 2025 – August 2026 | the backfill, the site export, the dashboard |
+
+A GCP *project* is the unit of billing and permissions. Separate projects mean code under review
+can never read or overwrite the real data, and a mistake in dev cannot cost money in prod.
+
+### Bootstrap, then Terraform
+
+Two steps, because Terraform needs a project (with billing) to put resources in:
+
+```bash
+make bootstrap ENV=dev BILLING_ACCOUNT=XXXXXX-XXXXXX-XXXXXX ORG_ID=000000000000
+make apply ENV=dev
+```
+
+`make bootstrap` runs four `gcloud` commands once per environment: create the project inside
+the organisation, link the billing account, enable the budget API, and create a **budget of €5**
+that e-mails at 50%, 90% and 100%. A budget only *warns*; it never stops spending.
+
+`make apply` runs Terraform on `infra/gcp/`. Terraform compares the files with what exists and
+makes the difference. What it manages:
+
+| File | What |
+|---|---|
+| `main.tf` | APIs; the lake bucket; datasets `raw`, `staging`, `intermediate`, `marts`; the raw tables; a query quota |
+| `iam.tf` | the pipeline service account and its roles; impersonation for the operator; federation for CI (dev) |
+| `schemas/*.json` | the raw tables' columns: name, type, description |
+| `versions.tf` | Terraform and provider versions (`google` 8.x), and the credentials used |
+
+Details that matter:
+
+- **Bucket** `<project>-lake` in `us-central1`, a free-tier region. Uniform access (permissions
+  only through IAM), public access blocked, soft delete off (it would keep — and bill — every
+  overwritten object for a week). A lifecycle rule deletes trip ZIPs after 30 days: Silver is the
+  copy we keep, and a ZIP can always be downloaded again.
+- **`force_destroy` and `delete_contents_on_destroy`:** everything in the lake and the warehouse
+  can be rebuilt from the public sources, so `make destroy` is allowed to delete it with its data.
+  A teardown that stops on a non-empty bucket is a teardown nobody runs.
+- **Query quota:** at most 10 GiB (dev) and 50 GiB (prod) scanned per day. BigQuery bills by
+  bytes scanned and the first TiB a month is free for the whole billing account; the two quotas
+  cap a month at about 1.8 TiB — the free TiB plus roughly the €5 the budgets watch. The budget
+  warns; the quota stops.
+- **State.** Terraform remembers what it created in a *state* file. Here it stays on the
+  operator's machine, one *workspace* per environment (`terraform.tfstate.d/dev/`), git-ignored.
+  Shared remote state is only worth it when several people or machines apply.
+
+### Who can do what
+
+| Identity | Can | Cannot |
+|---|---|---|
+| `citypulse-pipeline` (service account) | read/write the lake bucket; read/write tables in the datasets; run BigQuery jobs; in dev also create datasets (CI's per-run ones, which it then owns) | anything about IAM, other buckets, other projects |
+| the operator (you) | impersonate the pipeline account | — (as owner of the project you can do more, but the pipeline does not run with it) |
+| GitHub Actions, dev only | become the pipeline account, from this repo's `citypulse-*` workflows | anything in prod; `pull_request_target` runs |
+
+*Impersonation* means a person asks Google for a short-lived token **of the service account**.
+Set it up once per machine; the Google client libraries on it (the `citypulse` CLI, dbt, Airflow)
+then act as the pipeline:
+
+```bash
+gcloud auth application-default login \
+  --impersonate-service-account=citypulse-pipeline@citypulse-tr-dev.iam.gserviceaccount.com
+```
+
+Running locally with that token is the honest test of least privilege: if the account lacks a
+permission, your laptop run fails the same way CI would. Terraform is the exception: it creates
+service accounts and IAM bindings, which the pipeline must never be able to do, so `make` hands it
+your own gcloud login token (`GOOGLE_OAUTH_ACCESS_TOKEN`) instead of ADC. The organisation forbids service-account
+keys, so there is no key file anywhere.
+
+GitHub Actions gets in through **Workload Identity Federation**: each workflow run receives a
+signed OIDC token from GitHub saying which repository, workflow and event it is; Google checks
+that token against the pool's *attribute condition* and swaps it for a short-lived token of the
+pipeline account. The condition here admits only this repository (by its immutable numeric id —
+a renamed or re-created repository gets a new one), only workflow files named `citypulse-*`,
+and only the events CI uses — `pull_request`, `push`, `workflow_dispatch`. It is an allowlist:
+a future workflow triggered by `issue_comment`, `workflow_run` or `pull_request_target` (which runs
+with the base repository's identity on code from a fork) gets nothing.
+
+> **Problem we hit.** The first `make apply` failed with `403 Permission
+> 'iam.workloadIdentityPools.create' denied` — for the project owner. The IAM API had been
+> enabled seconds earlier by the same apply, and Google takes a minute or two to propagate it.
+> Re-running worked. Terraform now waits 90 seconds (`time_sleep`) after enabling the APIs before
+> creating the pool, so a fresh `destroy` → `apply` works in one go.
+
+---
+
+## 9. Loading the warehouse
+
+`citypulse load <source> --from … [--to …]` (or `make load ENV=…`) moves Silver into BigQuery's
+`raw` dataset, one period at a time ([decision 0013](decisions/0013-atomic-partition-loads-with-audit.md)).
+
+### One period, one partition, one job
+
+Each raw table is **partitioned**: BigQuery stores it as separate slices by the value of one
+column. `weather_hourly` and `air_quality_hourly` have one partition per New York day
+(`local_date`); `trips` has one per source file month (`source_month`). Queries that filter on
+that column only read the slices they need — cheaper and faster.
+
+The loader writes to the **partition decorator**, the table name plus `$` and the partition:
+
+```
+citypulse-tr-prod.raw.trips$202501        ← January 2025's trips, nothing else
+citypulse-tr-prod.raw.weather_hourly$20250309
+```
+
+with `WRITE_TRUNCATE`. BigQuery replaces exactly that partition with the files of the period, in
+one job. Either the job succeeds and the partition holds the new data, or it fails and the old data
+is still there: there is no moment with half a day, and running it twice gives the same table.
+(Every row must belong to the partition being written; it does by construction, because Silver is
+written per period.)
+
+### Only what is ready, and counted
+
+The loader reads the period's **manifest** first. No manifest means the period was never ingested,
+or its ingestion failed: `NotReadyError`, nothing loaded. The load uses exactly the Silver files the
+manifest lists, never a wildcard, so a stray file cannot slip in. The schema comes from the
+table — which Terraform created from `infra/gcp/schemas/` — and is never guessed from the files.
+A test (`tests/test_schemas.py`) compares those JSON schemas with what the Python code writes, so
+the two cannot drift apart unnoticed.
+
+Before the job, the loader adds up the row counts stored in the footers of the Parquet files (a
+few bytes each; no data is read) and compares them with the manifest. A mismatch stops the load
+before the table is touched, so a good partition is never replaced by doubtful files.
+
+After a completed job, a row goes into `raw.load_audit`:
+
+| source | period | partition_id | expected_rows | loaded_rows | files | manifest_extracted_at | loaded_at |
+|---|---|---|---|---|---|---|---|
+| citibike | 2025-01 | 202501 | 2124475 | 2124475 | 3 | … | … |
+
+`expected_rows` is the manifest's count, which came from the source bytes; `loaded_rows` is what
+BigQuery says it wrote. If they ever differed — the files were checked first, so this would mean
+BigQuery read them differently — the new partition is already in place: the row is still recorded,
+the command fails, and the dbt integrity test fails until the period is reloaded. `load_audit` is
+itself partitioned by month: an unpartitioned table accepts 1,500 changes a day, fewer than a full
+backfill plus a retry. The
+chain is complete: source file → manifest → load job → audit row, each step counting the same
+rows.
+
+> **Problem we hit.** The audit column was first called `partition`. It loads fine, but
+> `partition` is a reserved word in BigQuery SQL, so every query needs backticks around it — the
+> first verification query failed with `Syntax error: … keyword PARTITION`. Renamed to
+> `partition_id` before anything depended on it.

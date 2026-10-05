@@ -1,0 +1,74 @@
+[
+  {
+    "name": "observed_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Instant of the reading, UTC. For precipitation, rain, snowfall and wind_gusts_10m: the END of the hour the value covers."
+  },
+  {
+    "name": "local_date",
+    "type": "DATE",
+    "mode": "NULLABLE",
+    "description": "New York calendar day this hour belongs to (partition column)."
+  },
+  {
+    "name": "temperature_2m",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Air temperature 2 m above ground, °C."
+  },
+  {
+    "name": "apparent_temperature",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Felt temperature (wind chill, humidity), °C."
+  },
+  {
+    "name": "precipitation",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Total precipitation (rain, showers, snow water) in the preceding hour, mm."
+  },
+  {
+    "name": "rain",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Rain in the preceding hour, mm."
+  },
+  {
+    "name": "snowfall",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Snowfall in the preceding hour, cm."
+  },
+  {
+    "name": "wind_speed_10m",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Wind speed 10 m above ground, km/h."
+  },
+  {
+    "name": "wind_gusts_10m",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Maximum gust in the preceding hour, 10 m above ground, km/h."
+  },
+  {
+    "name": "relative_humidity_2m",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Relative humidity 2 m above ground, %."
+  },
+  {
+    "name": "cloud_cover",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Total cloud cover, %."
+  },
+  {
+    "name": "weather_code",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "WMO weather interpretation code (0 clear … 95+ thunderstorm)."
+  }
+]
