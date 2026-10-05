@@ -1,4 +1,7 @@
+{{ config(materialized='table') }}
 -- grain: one row per trip (ride_id).
+-- A table, not a view: the de-duplication reads every trip once per build, and the tests and the
+-- models below then read only the columns they need instead of re-running it.
 -- A trip that starts on the last evening of a month can be published in two months' files: keep
 -- the copy from the latest file. Adds New York day and hour, duration, and whether the trip is
 -- plausible for analysis (1 min to 3 h; shorter ones are false starts, longer ones mostly bikes not

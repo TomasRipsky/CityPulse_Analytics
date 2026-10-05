@@ -26,7 +26,7 @@ Its Terraform state lived inside the bucket it managed. None of it could be rebu
 - **Workload Identity Federation only in dev**, only for this repository's `citypulse-*`
   workflows and only for `pull_request`, `push` and `workflow_dispatch` events (an allowlist).
   Nothing in CI touches prod, so prod trusts no one outside.
-- A daily BigQuery query quota (10 GiB dev, 50 GiB prod) stops runaway scans, which a budget alert
+- A daily BigQuery query quota (20 GiB dev, 50 GiB prod) stops runaway scans, which a budget alert
   only reports; together they cap a month near the free TiB plus the budget.
 
 ## Alternatives considered

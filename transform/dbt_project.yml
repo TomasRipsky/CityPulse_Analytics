@@ -18,7 +18,10 @@ seeds:
 
 data_tests:
   citypulse:
-    +store_failures: true # failing rows land in the `audit` dataset for inspection
+    # Storing failures makes dbt rewrite generic tests as `select *`, so a not_null on the trips
+    # table would read every column (~25x the bytes). Only the integrity tests (small results)
+    # store their failing rows, in the `audit` dataset.
+    +store_failures: false
     +schema: audit
 
 models:

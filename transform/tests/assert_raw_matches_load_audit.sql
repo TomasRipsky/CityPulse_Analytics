@@ -1,3 +1,4 @@
+{{ config(store_failures=true) }}
 -- Every loaded period holds exactly the rows its latest load wrote, and that load wrote exactly the
 -- rows the lake manifest counted at the source. Fails on: a short or duplicated partition, a
 -- partition with no audit row, an audit row with no partition.

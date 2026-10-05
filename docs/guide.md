@@ -372,7 +372,7 @@ console, so the whole environment can be destroyed and rebuilt.
 
 | Project | Holds | Used by |
 |---|---|---|
-| `citypulse-tr-dev` | a sample: January and July 2025, both daylight-saving weekends | CI, which builds every pull request's dbt models here |
+| `citypulse-tr-dev` | a sample: weather and air quality for January and July 2025 and both daylight-saving weekends; trips for January 2025 | CI, which builds every pull request's dbt models here |
 | `citypulse-tr-prod` | the full dataset, January 2025 – August 2026 | the backfill, the site export, the dashboard |
 
 A GCP *project* is the unit of billing and permissions. Separate projects mean code under review
@@ -410,10 +410,10 @@ Details that matter:
 - **`force_destroy` and `delete_contents_on_destroy`:** everything in the lake and the warehouse
   can be rebuilt from the public sources, so `make destroy` is allowed to delete it with its data.
   A teardown that stops on a non-empty bucket is a teardown nobody runs.
-- **Query quota:** at most 10 GiB (dev) and 50 GiB (prod) scanned per day. BigQuery bills by
+- **Query quota:** at most 20 GiB (dev) and 50 GiB (prod) scanned per day. BigQuery bills by
   bytes scanned and the first TiB a month is free for the whole billing account; the two quotas
-  cap a month at about 1.8 TiB — the free TiB plus roughly the €5 the budgets watch. The budget
-  warns; the quota stops.
+  cap a month near 2 TiB — the free TiB plus roughly the €5–6 the budgets watch. The budget warns;
+  the quota stops.
 - **State.** Terraform remembers what it created in a *state* file. Here it stays on the
   operator's machine, one *workspace* per environment (`terraform.tfstate.d/dev/`), git-ignored.
   Shared remote state is only worth it when several people or machines apply.
@@ -632,6 +632,24 @@ day in a loaded month when nobody rode — which never happens, so a test fails 
 Each was shown to fail once on purpose: deleting one weather hour in dev made the integrity tests
 fail, and reloading that day with `citypulse load` made them pass again. Failing rows of any test
 are stored in the `audit` dataset (`store_failures`), so a failure can be inspected with SQL.
+
+### What a build costs
+
+BigQuery bills the bytes each query reads (the first TiB a month is free), with a minimum of 10 MB
+per query. Two choices keep a build cheap:
+
+- `stg_trips` is a **table**. As a view, every test and model that read it re-ran the
+  de-duplication over all the trips.
+- Generic tests **do not store their failures**. With `store_failures` on, dbt rewrites
+  `not_null` and friends as `select *` so it can keep the failing rows — on the trips table that
+  read every column, ~450 MiB per test instead of ~17. Only the integrity tests, whose results are
+  small, keep their failing rows (in the `audit` dataset).
+
+> **Problem we hit.** The first builds with trips in dev read 4.4 GiB each and tripped the 10 GiB
+> daily quota (which then did its job: every query stopped). Measuring bytes per query with
+> `bq ls -j` found the two causes above. A full build on dev's January 2025 sample now reads about
+> 1.6 GiB — 1 GiB of it the 10 MB minimum across ~110 queries — and the dev quota is 20 GiB.
+> A full build on prod's 20 months reads about 18 GB.
 
 ### CI
 

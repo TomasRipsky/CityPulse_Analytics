@@ -1,3 +1,4 @@
+{{ config(store_failures=true) }}
 -- Citi Bike runs every day: a day in a loaded month with no trips means data went missing.
 select local_date, trips
 from {{ ref('fct_city_day') }}

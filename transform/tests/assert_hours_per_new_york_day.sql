@@ -1,3 +1,4 @@
+{{ config(store_failures=true) }}
 -- Each New York day has as many hourly readings as it has hours: 24, or 23 / 25 on the days the
 -- clocks change. Checked for weather and air quality.
 with readings as (
