@@ -1,6 +1,6 @@
 # 0006 — dbt: staging views and mart tables in separate datasets
 
-- **Status:** Accepted
+- **Status:** Superseded by [0014](0014-dbt-layers-time-and-grain.md)
 - **Date:** 2026-03-07 (recorded retroactively on 2026-10-04)
 
 ## Context

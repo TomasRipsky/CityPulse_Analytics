@@ -16,6 +16,8 @@ but has not seen this project. The README says *what* and *how to run*; this fil
 7. [How the code is tested](#7-how-the-code-is-tested)
 8. [The cloud: projects, Terraform and identities](#8-the-cloud-projects-terraform-and-identities)
 9. [Loading the warehouse](#9-loading-the-warehouse)
+10. [Modelling with dbt](#10-modelling-with-dbt)
+11. [How the weather effects are measured](#11-how-the-weather-effects-are-measured)
 
 ---
 
@@ -513,3 +515,185 @@ rows.
 > `partition` is a reserved word in BigQuery SQL, so every query needs backticks around it — the
 > first verification query failed with `Syntax error: … keyword PARTITION`. Renamed to
 > `partition_id` before anything depended on it.
+
+---
+
+## 10. Modelling with dbt
+
+[dbt](https://www.getdbt.com/) turns the raw tables into the tables people query. Each *model* is
+one `select` statement in a `.sql` file; dbt works out the order from `ref()` and `source()`,
+creates the views and tables in BigQuery, runs the tests and documents everything
+([decision 0014](decisions/0014-dbt-layers-time-and-grain.md)). The project is in `transform/`.
+
+```bash
+make transform ENV=dev                    # dbt build: models + seeds + every test
+make transform ENV=dev ARGS="-s staging"  # one layer
+```
+
+### Layers
+
+```mermaid
+flowchart LR
+  subgraph raw["raw (loaded)"]
+    w[(weather_hourly)]
+    a[(air_quality_hourly)]
+    t[(trips)]
+    la[(load_audit)]
+  end
+  subgraph stg["staging (views)"]
+    sw[stg_weather_hourly]
+    sa[stg_air_quality_hourly]
+    st[stg_trips]
+  end
+  subgraph int["intermediate"]
+    iwh[int_weather_hours]
+    iwd[int_weather_days]
+    iad[int_air_days]
+    ith[int_trips_hours]
+    itd[int_trips_days]
+    cal[int_calendar_days]
+    base[int_baselines]
+  end
+  subgraph marts["marts (tables)"]
+    fh[fct_city_hour]
+    fd[fct_city_day]
+    m[mart_city_month]
+    ce[mart_condition_effects]
+    tc[mart_temperature_curve]
+    tr[mart_temperature_response]
+  end
+  w --> sw --> iwh --> iwd
+  a --> sa --> iad
+  t --> st --> ith & itd
+  la --> cal
+  iwh & ith & cal & sa --> fh
+  cal & iwd & iad & itd --> fd
+  fd --> m
+  fh & fd --> base --> ce
+  fh & fd --> ce
+  fd --> tc & tr
+```
+
+| Layer | Materialised as | Job |
+|---|---|---|
+| staging | views (free to keep, always current) | rename columns to say their unit, convert time, de-duplicate trips |
+| intermediate | views, except the two trip aggregates (tables: the only models that read every trip) | one grain per model: weather per hour and per day, air per day, trips per hour and per day, calendar, baselines |
+| marts | tables (fast for dashboards) | the facts people query and the answers |
+
+Every model starts with a comment that states its **grain** — what one row is. "One row per New
+York day" is a promise the `unique` test on its key then checks.
+
+### Time, again
+
+- Instants stay UTC. A day is a **New York day**: `date(started_at, "America/New_York")`. Plain
+  `date(started_at)` would give the UTC date and push evening trips into tomorrow.
+- Hours are keyed by the UTC hour start (`timestamp_trunc(started_at, hour)`). New York's offset is
+  always a whole number of hours, so a UTC hour is also exactly one local hour — and on the
+  fall-back night the two local 01:00s are two different keys instead of one doubled hour.
+- `fct_city_hour` therefore has 23 rows on the spring-forward Sunday and 25 on the fall-back one.
+
+### Moving rain to the hour it fell in
+
+Open-Meteo stamps rain, snow and gusts at the **end** of the hour they cover. `int_weather_hours`
+gives each hour the interval values of the **next** reading — only when that reading is exactly
+one hour later; otherwise (the last hour of the data, a gap) they are null, never 0. A unit test
+fixes the three cases:
+
+| hour_start | temperature (taken at the start) | precipitation (from the next stamp) |
+|---|---|---|
+| 12:00 | reading at 12:00 | stamped 13:00 |
+| 13:00 | reading at 13:00 | null — the 14:00 reading is missing |
+| 15:00 | reading at 15:00 | null — nothing after it |
+
+### Trips: once each, and plausible
+
+`stg_trips` keeps one row per `ride_id`. A trip that starts on the last evening of a month can
+appear in two months' files; the copy from the latest file wins
+([decision 0011](decisions/0011-trip-dedupe-in-staging.md)). It also flags trips as
+`is_plausible` when they last between 1 minute and 3 hours: shorter ones are false starts, longer
+ones mostly bikes not docked properly. They are counted (`all_trips`) but left out of the
+analysis counts (`trips`) — flagged, never silently deleted.
+
+### No data is not zero
+
+`int_calendar_days` lists every New York day from the first to the last weather day, with its
+kind (workday, weekend, US federal holiday from a seed table) and whether its Citi Bike month was
+loaded. The facts then say `trips = null` for a month that was never loaded and `trips = 0` for a
+day in a loaded month when nobody rode — which never happens, so a test fails if it does.
+
+### Tests at three levels
+
+| Level | Examples | Catches |
+|---|---|---|
+| Column tests (YAML) | `unique`, `not_null`, `accepted_values`, `in_range` (temperature −35…45 °C, AQI 0…500) | bad values, duplicated keys |
+| Unit tests (dbt ≥ 1.8) | dedupe keeps the latest file; DST hours; rain shifted to the right hour; holidays beat weekends; effect arithmetic | logic errors, with tiny hand-written inputs and no warehouse data |
+| Integrity tests (`transform/tests/`) | raw rows = audited rows = source rows per period; readings per New York day = hours in that day; trips every day of a loaded month | data that went missing or doubled on the way |
+
+Each was shown to fail once on purpose: deleting one weather hour in dev made the integrity tests
+fail, and reloading that day with `citypulse load` made them pass again. Failing rows of any test
+are stored in the `audit` dataset (`store_failures`), so a failure can be inspected with SQL.
+
+### CI
+
+Every pull request runs `dbt build` in **its own datasets** in the dev project
+(`ci_pr_<number>_<run>_staging`, `…_marts`…), reading dev's raw sample. They expire after a day
+and are dropped at the end of the run. The pull request's own models are built and tested, never
+the ones already deployed. GitHub Actions reaches BigQuery through Workload Identity Federation as
+the pipeline account (chapter 8).
+
+---
+
+## 11. How the weather effects are measured
+
+The question has a trap: bad weather comes with seasons, and seasons come with daylight, holidays
+and tourists. July has more trips *and* more thunderstorms than January. Comparing rainy and dry
+days across the whole year would mostly measure the season. So every period is compared with
+**the same kind of period in good weather**
+([decision 0015](decisions/0015-expected-vs-actual-effects.md)).
+
+### Expected vs actual
+
+1. **Expected trips** (`int_baselines`): the average trips of *dry* periods with the same month,
+   the same kind of day (workday, weekend, holiday) and, for hourly comparisons, the same hour.
+   "8 a.m. on a July workday with no rain" → on average, say, 9,000 trips.
+2. **Actual trips** in each period with a given condition: an hour of rain, a snowy day…
+3. **Effect** = total actual ÷ total expected − 1, over every period in the band:
+
+   ```
+   rainy 8 a.m. on 2025-07-08: 6,300 trips, expected 9,000
+   rainy 6 p.m. on 2025-07-14: 7,800 trips, expected 12,000
+   effect = (6,300 + 7,800) / (9,000 + 12,000) − 1 = −33 %
+   ```
+
+Summing before dividing weights each period by how much riding normally happens then, so a rainy
+rush hour counts more than a rainy 3 a.m.
+
+| Condition | Measured per | Bands |
+|---|---|---|
+| Rain | hour (showers come and go) | dry · drizzle < 1 mm · rain 1–4 mm · heavy ≥ 4 mm |
+| Snow | day | none · < 5 cm · ≥ 5 cm |
+| Wind | day, dry days only | max gust < 30 · 30–50 · 50–70 · ≥ 70 km/h |
+| Air quality | day, dry days only | US EPA category of the day's mean AQI |
+
+Each effect is given for all riders, **members** (annual subscribers, mostly commuting) and
+**casual** riders (single rides and day passes) separately, with the number of periods behind it.
+
+### Temperature
+
+Temperature *is* the season, so it gets two views:
+
+- `mart_temperature_curve` — trips per dry day by felt temperature, in 5 °C bands. This is the
+  honest raw picture of how much more the city rides when it is warm, with everything the season
+  brings mixed in.
+- `mart_temperature_response` — the season held still. Each dry day is compared with its own
+  month's dry-day mean, for temperature and for trips; the least-squares slope of one against the
+  other says how many % more trips a day gets for each °C it is warmer **than usual for that
+  month**.
+
+### Limits
+
+- These are careful **associations**, not proof of cause: a stormy hour may also be darker,
+  colder, or fall in a week of events.
+- Bands with few periods (a handful of gale days) are noisy: the number of periods is always shown.
+- Expected values need at least 3 dry periods in their cell; periods without a baseline are left
+  out of the sums.

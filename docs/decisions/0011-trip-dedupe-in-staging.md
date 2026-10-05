@@ -1,6 +1,6 @@
 # 0011 — Trips de-duplicated in staging, not filtered by month
 
-- **Status:** Proposed (implemented with the dbt models)
+- **Status:** Accepted (implemented in `stg_trips`)
 - **Date:** 2026-10-04
 
 ## Context
