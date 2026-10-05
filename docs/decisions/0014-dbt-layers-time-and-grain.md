@@ -12,10 +12,11 @@ production tables, not the change.
 
 ## Decision
 - **dbt-core 1.12** (supported to July 2027; 2.0, released September 2026, is too new to bet on).
-- Three layers, each in its own dataset: **staging** (views: unit-named columns, New York time,
-  trips de-duplicated across source files), **intermediate** (weather per hour with interval
-  variables moved to the hour they describe; daily weather and air; trips per hour and per day as
-  tables, the only models that scan every trip; calendar; baselines), **marts** (tables).
+- Three layers, each in its own dataset: **staging** (unit-named columns, New York time, trips
+  de-duplicated across source files — views, except `stg_trips`, a table so the de-duplication
+  runs once per build), **intermediate** (weather per hour with interval variables moved to the
+  hour they describe; daily weather and air; trips per hour and per day as tables; calendar),
+  **marts** (tables, including the baselines the effects are measured against).
 - **Grains that can answer the question:** `fct_city_hour` (one row per hour) and
   `fct_city_day` (one row per New York day) join trips, weather, air quality and calendar.
   `mart_city_month` is a plain monthly summary for dashboards — totals and means, no ratios
@@ -38,4 +39,6 @@ production tables, not the change.
 
 ## Consequences
 - The analysis models read small tables (one row per hour or day), not 70 million trips.
-- A full build scans the trips table twice; the 20 GB per-query cap and the daily quota bound it.
+- A full build reads the raw trips once (into `stg_trips`) and then only the columns each model
+  or test needs: about 1.6 GiB on dev's sample, ~18 GB on prod's 20 months. The 20 GB per-query
+  cap and the daily quota bound it.

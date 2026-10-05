@@ -27,10 +27,17 @@ models:
       - name: month
         data_tests: [unique, not_null]
 
-  - name: int_baselines
+  - name: mart_baselines
     description: >
-      Expected trips: mean under dry conditions for the same month, kind of day and (hourly
-      baselines) hour, per rider. Grain: month × day_type × local_hour (null for daily) × rider.
+      Expected trips: the mean of the reference periods for each condition — dry hours (rain),
+      dry days (snow), dry days with gusts under 40 km/h (wind), dry days with good air (air
+      quality) — for the same month, kind of day (holidays count as weekends) and, hourly, the same
+      hour; per rider; at least 3 reference periods. Grain: reference × month × day_type ×
+      local_hour (null for daily) × rider.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["reference", "month", "day_type", "local_hour", "rider"]
 
   - name: mart_condition_effects
     description: >
@@ -59,13 +66,36 @@ unit_tests:
           - {trips_loaded: true, precipitation_mm: 2.0, snowfall_cm: 0, month: "2025-07-01", day_type: "workday", local_hour: 8, trips: 700, member_trips: 600, casual_trips: 100}
       - input: ref('fct_city_day')
         rows: []
-      - input: ref('int_baselines')
+      - input: ref('mart_baselines')
         rows:
-          - {month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "all", expected_trips: 1000}
-          - {month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "member", expected_trips: 750}
-          - {month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "casual", expected_trips: 250}
+          - {reference: "dry hour", month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "all", expected_trips: 1000}
+          - {reference: "dry hour", month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "member", expected_trips: 750}
+          - {reference: "dry hour", month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "casual", expected_trips: 250}
     expect:
       rows:
         - {condition: "rain", band: "rain (1–4 mm/h)", rider: "all", trips: 700, expected_trips: 1000, effect_pct: -30.0}
         - {condition: "rain", band: "rain (1–4 mm/h)", rider: "member", trips: 600, expected_trips: 750, effect_pct: -20.0}
         - {condition: "rain", band: "rain (1–4 mm/h)", rider: "casual", trips: 100, expected_trips: 250, effect_pct: -60.0}
+
+  - name: daily_effects_compare_with_their_reference_band_and_holidays_count_as_weekends
+    model: mart_condition_effects
+    given:
+      - input: ref('fct_city_hour')
+        rows: []
+      - input: ref('fct_city_day')
+        rows:
+          # a windy dry holiday: compared with calm dry weekend days of the same month
+          - {trips_loaded: true, is_dry: true, snowfall_cm: 0, wind_gusts_max_kmh: 60, aqi_category: null, month: "2025-07-01", day_type: "holiday", trips: 80, member_trips: 50, casual_trips: 30}
+      - input: ref('mart_baselines')
+        rows:
+          - {reference: "calm dry day", month: "2025-07-01", day_type: "weekend", local_hour: null, rider: "all", expected_trips: 100}
+          - {reference: "calm dry day", month: "2025-07-01", day_type: "weekend", local_hour: null, rider: "member", expected_trips: 50}
+          - {reference: "calm dry day", month: "2025-07-01", day_type: "weekend", local_hour: null, rider: "casual", expected_trips: 50}
+          # the dry-day baseline must not be used for wind
+          - {reference: "dry day", month: "2025-07-01", day_type: "weekend", local_hour: null, rider: "all", expected_trips: 80}
+    expect:
+      rows:
+        - {condition: "snow", band: "dry (reference)", rider: "all", trips: 80, expected_trips: 80, effect_pct: 0.0}
+        - {condition: "wind", band: "windy (55–70 km/h)", rider: "all", trips: 80, expected_trips: 100, effect_pct: -20.0}
+        - {condition: "wind", band: "windy (55–70 km/h)", rider: "member", trips: 50, expected_trips: 50, effect_pct: 0.0}
+        - {condition: "wind", band: "windy (55–70 km/h)", rider: "casual", trips: 30, expected_trips: 50, effect_pct: -40.0}

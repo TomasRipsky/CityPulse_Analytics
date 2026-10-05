@@ -552,12 +552,12 @@ flowchart LR
     ith[int_trips_hours]
     itd[int_trips_days]
     cal[int_calendar_days]
-    base[int_baselines]
   end
   subgraph marts["marts (tables)"]
     fh[fct_city_hour]
     fd[fct_city_day]
     m[mart_city_month]
+    base[mart_baselines]
     ce[mart_condition_effects]
     tc[mart_temperature_curve]
     tr[mart_temperature_response]
@@ -576,9 +576,9 @@ flowchart LR
 
 | Layer | Materialised as | Job |
 |---|---|---|
-| staging | views (free to keep, always current) | rename columns to say their unit, convert time, de-duplicate trips |
-| intermediate | views, except the two trip aggregates (tables: the only models that read every trip) | one grain per model: weather per hour and per day, air per day, trips per hour and per day, calendar, baselines |
-| marts | tables (fast for dashboards) | the facts people query and the answers |
+| staging | views (free to keep, always current) — except `stg_trips`, a table (see "What a build costs") | rename columns to say their unit, convert time, de-duplicate trips |
+| intermediate | views, except the two trip aggregates (tables) | one grain per model: weather per hour and per day, air per day, trips per hour and per day, calendar |
+| marts | tables (fast for dashboards) | the facts people query, the baselines and the answers |
 
 Every model starts with a comment that states its **grain** — what one row is. "One row per New
 York day" is a promise the `unique` test on its key then checks.
@@ -671,9 +671,10 @@ days across the whole year would mostly measure the season. So every period is c
 
 ### Expected vs actual
 
-1. **Expected trips** (`int_baselines`): the average trips of *dry* periods with the same month,
-   the same kind of day (workday, weekend, holiday) and, for hourly comparisons, the same hour.
-   "8 a.m. on a July workday with no rain" → on average, say, 9,000 trips.
+1. **Expected trips** (`mart_baselines`): the average trips of the condition's *reference*
+   periods — good conditions of its own kind — with the same month, the same kind of day and, for
+   rain, the same hour. "8 a.m. on a July workday with no rain" → on average, say, 9,000 trips.
+   Holidays count as weekends here: a month has at most two, too few for a baseline of their own.
 2. **Actual trips** in each period with a given condition: an hour of rain, a snowy day…
 3. **Effect** = total actual ÷ total expected − 1, over every period in the band:
 
@@ -686,12 +687,20 @@ days across the whole year would mostly measure the season. So every period is c
 Summing before dividing weights each period by how much riding normally happens then, so a rainy
 rush hour counts more than a rainy 3 a.m.
 
-| Condition | Measured per | Bands |
-|---|---|---|
-| Rain | hour (showers come and go) | dry · drizzle < 1 mm · rain 1–4 mm · heavy ≥ 4 mm |
-| Snow | day | none · < 5 cm · ≥ 5 cm |
-| Wind | day, dry days only | max gust < 30 · 30–50 · 50–70 · ≥ 70 km/h |
-| Air quality | day, dry days only | US EPA category of the day's mean AQI |
+| Condition | Measured per | Reference (expected from) | Bands |
+|---|---|---|---|
+| Rain | hour (showers come and go) | dry hours | drizzle < 1 mm · rain 1–4 mm · heavy ≥ 4 mm |
+| Snow | day | dry days | < 5 cm · ≥ 5 cm |
+| Wind | day, dry days only | dry days with gusts < 40 km/h | 40–55 · 55–70 · ≥ 70 km/h |
+| Air quality | day, dry days only | dry days with good air | US EPA categories above "good" |
+
+The reference band is listed too, with an effect of ~0 by construction — a built-in check.
+
+> **Problem we hit.** The first version used "all dry days" as the baseline for wind and air
+> quality, the very days being split into bands. The bands then shared out the baseline between
+> them: their effects had to add up to zero, calm days got an effect they do not have (+6% in a
+> worked example) and windy days were understated by a quarter. A code review caught it before
+> any number was published; every condition now has its own reference.
 
 Each effect is given for all riders, **members** (annual subscribers, mostly commuting) and
 **casual** riders (single rides and day passes) separately, with the number of periods behind it.
@@ -713,5 +722,7 @@ Temperature *is* the season, so it gets two views:
 - These are careful **associations**, not proof of cause: a stormy hour may also be darker,
   colder, or fall in a week of events.
 - Bands with few periods (a handful of gale days) are noisy: the number of periods is always shown.
-- Expected values need at least 3 dry periods in their cell; periods without a baseline are left
-  out of the sums.
+- Expected values need at least 3 reference periods in their cell; periods without a baseline are
+  left out of the sums.
+- A day whose weather is not fully known (its last hour's rain is missing) is never counted as
+  dry or wet: its totals are null.

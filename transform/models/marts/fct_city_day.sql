@@ -19,8 +19,8 @@ select
     if(c.trips_loaded, coalesce(t.casual_trips, 0), null) as casual_trips,
     if(c.trips_loaded, coalesce(t.electric_trips, 0), null) as electric_trips,
     if(c.trips_loaded, coalesce(t.all_trips, 0), null) as all_trips,
-    t.duration_median_min,
-    t.active_stations,
+    if(c.trips_loaded, t.duration_median_min, null) as duration_median_min,
+    if(c.trips_loaded, t.active_stations, null) as active_stations,
     w.temperature_mean_c,
     w.temperature_min_c,
     w.temperature_max_c,
@@ -38,8 +38,8 @@ select
     a.aqi_max,
     a.aqi_category,
     a.pm2_5_mean_ugm3,
-    -- dry: less than 1 mm of precipitation and no snow over the day
-    w.precipitation_mm < 1 and coalesce(w.snowfall_cm, 0) = 0 as is_dry
+    -- dry: less than 1 mm of precipitation and no snow over the day (null when not fully known)
+    w.precipitation_mm < 1 and w.snowfall_cm = 0 as is_dry
 from calendar c
 left join weather w using (local_date)
 left join air a using (local_date)

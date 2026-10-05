@@ -48,6 +48,7 @@ terraform.tfstate.d/
 transform/target/
 transform/dbt_packages/
 transform/logs/
+transform/.user.yml
 
 # Site
 site/node_modules/

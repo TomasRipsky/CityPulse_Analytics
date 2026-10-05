@@ -12,13 +12,20 @@ explainable on a public page to people who know no statistics.
 ## Decision
 Measure each condition against what the same kind of period gets in good weather:
 
-- **Expected trips** = the mean trips of **dry** periods with the same month, the same kind of day
-  (workday, weekend, holiday) and — for hourly conditions — the same hour of the day
-  (`int_baselines`, at least 3 dry periods per cell).
+- **Expected trips** = the mean trips of the condition's **reference periods** — good conditions
+  of its own kind — with the same month, the same kind of day (workday or weekend; holidays count
+  as weekends, a month has too few for their own baseline) and, for rain, the same hour of the day
+  (`mart_baselines`, at least 3 reference periods per cell). References: dry hours (rain), dry days
+  (snow), dry days with gusts under 40 km/h (wind), dry days with good air (air quality).
 - **Effect** = actual ÷ expected − 1, summed over every period in a band
-  (`mart_condition_effects`), for all riders, members and casual riders separately.
+  (`mart_condition_effects`), for all riders, members and casual riders separately. The reference
+  band is listed too (`is_reference`); its effect is ~0 by construction, a built-in check.
 - **Rain** is measured per **hour** (showers come and go; a day with one wet hour is not a rainy
-  day); **snow, wind and air quality** per **day**, on otherwise dry days.
+  day); **snow, wind and air quality** per **day**, wind and air on otherwise dry days.
+- A band is never compared with a baseline that contains its own periods: with "all dry days" as
+  the baseline for wind, the calm and windy bands would split the baseline between them, their
+  effects would have to add up to zero, calm days would show an effect they do not have and windy
+  ones would be understated (a code review caught this before any number was published).
 - **Temperature** has two views: the raw curve of trips per dry day by felt temperature
   (`mart_temperature_curve`, honest about mixing in the season), and the response with the
   season held still — each dry day against its own month's mean — as "% more trips per °C
