@@ -84,7 +84,15 @@ def test_ingest_month_reads_every_csv_and_totals_them(lake, tmp_path):
     ]
     assert manifest["silver"] == [paths.silver_trips_part(JAN, 0), paths.silver_trips_part(JAN, 1)]
     assert sum(lake.read_table(p).num_rows for p in manifest["silver"]) == 8
-    assert lake.read_bytes(paths.bronze_trips(JAN)) == content
+    record = lake.read_json(paths.bronze_trips(JAN))  # the archive stays at its source
+    assert record["url"] == "https://s3.amazonaws.com/tripdata/202501-citibike-tripdata.zip"
+    assert record["size"] == len(content)
+    assert [m["name"] for m in record["members"] if m["trip_csv"]] == [  # archive order, as is
+        "202501-citibike-tripdata_2.csv",
+        "202501-citibike-tripdata_1.csv",
+    ]
+    assert all(isinstance(m["crc32"], int) for m in record["members"])
+    assert not any(rel.endswith(".zip") for rel in lake.list(""))
     assert lake.exists(paths.manifest_path("citibike", "2025-01"))
     assert not list(tmp_path.glob("*.zip"))  # the local download is cleaned up
 
@@ -169,7 +177,7 @@ def test_an_unpublished_rerun_keeps_the_last_good_month(lake, tmp_path):
     with pytest.raises(NotPublishedError):
         ingest_month(JAN, lake, http_serving(None), workdir=tmp_path)
     assert lake.read_json(paths.manifest_path("citibike", "2025-01"))["rows"] == 3
-    assert lake.read_bytes(paths.bronze_trips(JAN)) == content
+    assert lake.read_json(paths.bronze_trips(JAN))["size"] == len(content)
 
 
 def test_a_rerun_that_fails_reconciliation_keeps_the_last_good_month(lake, tmp_path, monkeypatch):
@@ -182,7 +190,7 @@ def test_a_rerun_that_fails_reconciliation_keeps_the_last_good_month(lake, tmp_p
             JAN, lake, http_serving(zip_bytes({"m_1.csv": trips_csv(5, "b")})), workdir=tmp_path
         )
     assert lake.read_json(paths.manifest_path("citibike", "2025-01"))["rows"] == 3
-    assert lake.read_bytes(paths.bronze_trips(JAN)) == good
+    assert lake.read_json(paths.bronze_trips(JAN))["size"] == len(good)
     assert lake.read_table(paths.silver_trips_part(JAN, 0)).num_rows == 3
 
 

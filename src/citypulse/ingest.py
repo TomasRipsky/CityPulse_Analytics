@@ -6,7 +6,8 @@ Two phases, so a failed run never costs us the last good version:
         fetch or download the source, validate it, build Silver, check the control totals
     publish (only if prepare succeeded)
         1. delete the old manifest   (the period is "not ready" while it is rewritten)
-        2. write Bronze              (exactly what the source returned)
+        2. write Bronze              (weather, air: the response as received; trips: the
+                                      archive's record — URL, ETag, every file's CRC-32)
         3. write Silver              (for trips: old parts removed first)
         4. write the manifest        (only now is the period visible)
 
@@ -76,14 +77,22 @@ def ingest_month(month: date, lake: Lake, http: Http, workdir: Path) -> dict[str
     local_zip = workdir / f"{month:%Y%m}-citibike-tripdata.zip"
     local_parts: list[Path] = []
     try:
-        http.download(url, local_zip)
-        files, local_parts = _convert_all(local_zip, month, workdir)
+        download = http.download(url, local_zip)
+        files, local_parts, members = _convert_all(local_zip, month, workdir)
 
         manifest_rel = paths.manifest_path("citibike", f"{month:%Y-%m}")
         bronze = paths.bronze_trips(month)
         silver = [paths.silver_trips_part(month, i) for i in range(len(local_parts))]
+        record = {
+            "url": url,
+            "size": download.size,
+            "etag": download.etag,
+            "last_modified": download.last_modified,
+            "downloaded_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "members": members,
+        }
         lake.delete(manifest_rel)
-        lake.put_file(bronze, local_zip)
+        lake.write_json(bronze, record)
         lake.delete_dir(paths.silver_trips_dir(month))
         for rel, local in zip(silver, local_parts, strict=True):
             lake.put_file(rel, local)
@@ -106,13 +115,29 @@ def ingest_month(month: date, lake: Lake, http: Http, workdir: Path) -> dict[str
     return manifest
 
 
-def _convert_all(local_zip: Path, month: date, workdir: Path) -> tuple[list[dict], list[Path]]:
-    """Convert every trip CSV to a local Parquet part, checking each against its row count."""
+def _convert_all(
+    local_zip: Path, month: date, workdir: Path
+) -> tuple[list[dict], list[Path], list[dict]]:
+    """Convert every trip CSV to a local Parquet part, checking each against its row count.
+
+    Also returns the archive's full listing (name, sizes, CRC-32 of every entry) for Bronze.
+    """
     files: list[dict] = []
     parts: list[Path] = []
     try:
         with zipfile.ZipFile(local_zip) as zf:
             members = trip_members(zf)
+            trip_names = {info.filename for info in members}
+            listing = [
+                {
+                    "name": info.filename,
+                    "size": info.file_size,
+                    "compress_size": info.compress_size,
+                    "crc32": info.CRC,
+                    "trip_csv": info.filename in trip_names,
+                }
+                for info in zf.infolist()
+            ]
             if not members:
                 raise ReconciliationError(f"{local_zip.name}: no trip CSV in the archive")
             for index, info in enumerate(members):
@@ -132,4 +157,4 @@ def _convert_all(local_zip: Path, month: date, workdir: Path) -> tuple[list[dict
         for part in parts:
             part.unlink(missing_ok=True)
         raise
-    return files, parts
+    return files, parts, listing

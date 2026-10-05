@@ -72,11 +72,22 @@ def test_download_of_a_missing_file_is_not_published(tmp_path, status):
     assert not (tmp_path / "f.zip").exists()
 
 
+def test_download_reports_what_the_server_said(tmp_path):
+    headers = {"ETag": '"abc123"', "Last-Modified": "Wed, 12 Feb 2025 10:00:00 GMT"}
+    http = make_http(lambda request: httpx.Response(200, headers=headers, content=b"zip"))
+    info = http.download(URL, tmp_path / "f.zip")
+    assert (info.size, info.etag, info.last_modified) == (
+        3,
+        '"abc123"',
+        "Wed, 12 Feb 2025 10:00:00 GMT",
+    )
+
+
 def test_download_retries_a_truncated_body(tmp_path):
     short = httpx.Response(200, headers={"Content-Length": "10"}, content=b"12345")
     full = httpx.Response(200, content=b"1234567890")
     http = make_http(sequence(lambda r: short, full))
-    assert http.download(URL, tmp_path / "f.zip") == 10
+    assert http.download(URL, tmp_path / "f.zip").size == 10
     assert (tmp_path / "f.zip").read_bytes() == b"1234567890"
 
 
