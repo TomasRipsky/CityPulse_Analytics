@@ -67,6 +67,7 @@ airflow-build: ## Build the Airflow image for ENV from this commit (the deployed
 
 airflow-up: airflow-build ## Start Airflow for ENV on http://127.0.0.1:8080 (uses your gcloud ADC)
 	$(COMPOSE) up -d --wait
+	@echo "Tasks run on this machine: keep it awake while they run (macOS: caffeinate -dims)."
 
 airflow-down: ## Stop Airflow for ENV (keeps its metadata database)
 	$(COMPOSE) down

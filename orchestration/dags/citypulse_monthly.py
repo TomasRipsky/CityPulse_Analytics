@@ -7,21 +7,22 @@ retried by the next run or by hand — nothing half-written is left behind.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from airflow.sdk import dag, task
 from citypulse_common import CLI, DEFAULT_ARGS, LAKE, LAST_DAY, PROJECT, RAW, run_moment
-from citypulse_dates import last_monthly_run, trips_month_for_run
+from citypulse_dates import monthly_end_date, trips_month_for_run
 
 
 @dag(
     dag_id="citypulse_monthly",
     schedule="0 6 15 * *",
     start_date=datetime(2025, 3, 15, tzinfo=UTC),
-    end_date=last_monthly_run(LAST_DAY) if LAST_DAY else None,
+    end_date=monthly_end_date(LAST_DAY) if LAST_DAY else None,
     catchup=False,
     max_active_runs=2,
-    default_args=DEFAULT_ARGS,
+    # a hung task (lost network, a sleeping laptop) fails and retries instead of waiting forever
+    default_args={**DEFAULT_ARGS, "execution_timeout": timedelta(minutes=90)},
     tags=["citypulse", "ingest", "load"],
     doc_md=__doc__,
 )

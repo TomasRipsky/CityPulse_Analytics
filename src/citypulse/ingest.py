@@ -20,6 +20,8 @@ reconciled against.
 from __future__ import annotations
 
 import json
+import logging
+import time
 import zipfile
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -32,6 +34,8 @@ from citypulse import openmeteo
 from citypulse.citibike import TRIP_SCHEMA, convert, count_rows, trip_members, zip_url
 from citypulse.http import Http
 from citypulse.lake import Lake
+
+log = logging.getLogger("citypulse")
 
 
 class ReconciliationError(Exception):
@@ -77,7 +81,14 @@ def ingest_month(month: date, lake: Lake, http: Http, workdir: Path) -> dict[str
     local_zip = workdir / f"{month:%Y%m}-citibike-tripdata.zip"
     local_parts: list[Path] = []
     try:
+        started = time.monotonic()
         download = http.download(url, local_zip)
+        log.info(
+            "trips %s: downloaded %.0f MB in %.0f s",
+            f"{month:%Y-%m}",
+            download.size / 1e6,
+            time.monotonic() - started,
+        )
         files, local_parts, members = _convert_all(local_zip, month, workdir)
 
         manifest_rel = paths.manifest_path("citibike", f"{month:%Y-%m}")
@@ -94,8 +105,15 @@ def ingest_month(month: date, lake: Lake, http: Http, workdir: Path) -> dict[str
         lake.delete(manifest_rel)
         lake.write_json(bronze, record)
         lake.delete_dir(paths.silver_trips_dir(month))
+        started = time.monotonic()
         for rel, local in zip(silver, local_parts, strict=True):
             lake.put_file(rel, local)
+        log.info(
+            "trips %s: published %d parts in %.0f s",
+            f"{month:%Y-%m}",
+            len(silver),
+            time.monotonic() - started,
+        )
     finally:
         local_zip.unlink(missing_ok=True)
         for local in local_parts:
@@ -152,6 +170,12 @@ def _convert_all(
                     )
                 files.append(
                     {"name": info.filename, "rows": written, "uncompressed_bytes": info.file_size}
+                )
+                log.info(
+                    "trips %s: %s → %d rows (matches the source)",
+                    f"{month:%Y-%m}",
+                    info.filename,
+                    written,
                 )
     except BaseException:
         for part in parts:

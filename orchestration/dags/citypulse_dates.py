@@ -19,13 +19,18 @@ def trips_month_for_run(run_at: datetime) -> date:
     return date(months // 12, months % 12 + 1, 1)
 
 
-def last_daily_run(last_day: date) -> datetime:
-    """The daily run (06:00 UTC) that ingests `last_day`: the end_date of a frozen dataset."""
+def daily_end_date(last_day: date) -> datetime:
+    """end_date of the daily DAG for a dataset ending on `last_day`.
+
+    Airflow treats end_date as exclusive, so it sits a few hours after the last run (06:00 UTC the
+    next day, which ingests `last_day`) and well before the run after it.
+    """
     run_day = last_day + timedelta(days=1)
-    return datetime(run_day.year, run_day.month, run_day.day, 6, 0, tzinfo=UTC)
+    return datetime(run_day.year, run_day.month, run_day.day, 12, 0, tzinfo=UTC)
 
 
-def last_monthly_run(last_day: date) -> datetime:
-    """The monthly run (15th, 06:00 UTC) that ingests the month of `last_day`."""
+def monthly_end_date(last_day: date) -> datetime:
+    """end_date of the monthly DAG: just after the run (15th, 06:00 UTC) that ingests the month of
+    `last_day`, before the next month's run."""
     months = last_day.year * 12 + last_day.month - 1 + 2
-    return datetime(months // 12, months % 12 + 1, 15, 6, 0, tzinfo=UTC)
+    return datetime(months // 12, months % 12 + 1, 15, 12, 0, tzinfo=UTC)

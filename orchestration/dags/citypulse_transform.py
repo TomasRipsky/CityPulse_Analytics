@@ -7,7 +7,7 @@ one build per day loaded.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from airflow.sdk import dag, task
 from citypulse_common import DBT_DIR, DEFAULT_ARGS, ENV, RAW, VENV_BIN
@@ -19,7 +19,8 @@ from citypulse_common import DBT_DIR, DEFAULT_ARGS, ENV, RAW, VENV_BIN
     start_date=datetime(2025, 1, 1, tzinfo=UTC),
     catchup=False,
     max_active_runs=1,
-    default_args=DEFAULT_ARGS,
+    # a hung task (lost network, a sleeping laptop) fails and retries instead of waiting forever
+    default_args={**DEFAULT_ARGS, "execution_timeout": timedelta(minutes=60)},
     tags=["citypulse", "dbt"],
     doc_md=__doc__,
 )

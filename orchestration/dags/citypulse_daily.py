@@ -6,11 +6,11 @@ Ingestion itself refuses a day that is not over, so a manual run at the wrong ti
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from airflow.sdk import dag, task
 from citypulse_common import CLI, DEFAULT_ARGS, LAKE, LAST_DAY, PROJECT, RAW, run_moment
-from citypulse_dates import last_daily_run, ny_day_for_run
+from citypulse_dates import daily_end_date, ny_day_for_run
 
 SOURCES = {"weather": "weather_hourly", "air-quality": "air_quality_hourly"}
 
@@ -19,10 +19,11 @@ SOURCES = {"weather": "weather_hourly", "air-quality": "air_quality_hourly"}
     dag_id="citypulse_daily",
     schedule="0 6 * * *",
     start_date=datetime(2025, 1, 2, tzinfo=UTC),
-    end_date=last_daily_run(LAST_DAY) if LAST_DAY else None,
+    end_date=daily_end_date(LAST_DAY) if LAST_DAY else None,
     catchup=False,
     max_active_runs=16,
-    default_args=DEFAULT_ARGS,
+    # a hung task (lost network, a sleeping laptop) fails and retries instead of waiting forever
+    default_args={**DEFAULT_ARGS, "execution_timeout": timedelta(minutes=20)},
     tags=["citypulse", "ingest", "load"],
     doc_md=__doc__,
 )

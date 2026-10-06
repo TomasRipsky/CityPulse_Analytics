@@ -26,9 +26,16 @@ def test_a_monthly_run_loads_trips_two_months_back():
     assert trips_month_for_run(datetime(2026, 2, 15, 6, 0, tzinfo=UTC)) == date(2025, 12, 1)
 
 
-def test_last_runs_cover_the_last_day_and_month_exactly():
-    from citypulse_dates import last_daily_run, last_monthly_run
+def test_end_dates_include_the_last_run_and_exclude_the_next():
+    from datetime import timedelta
+
+    from citypulse_dates import daily_end_date, monthly_end_date
 
     last = date(2026, 8, 31)
-    assert ny_day_for_run(last_daily_run(last)) == last
-    assert trips_month_for_run(last_monthly_run(last)) == date(2026, 8, 1)
+    last_daily = datetime(2026, 9, 1, 6, 0, tzinfo=UTC)  # ingests 31 August
+    assert ny_day_for_run(last_daily) == last
+    assert last_daily < daily_end_date(last) < last_daily + timedelta(days=1)
+
+    last_monthly = datetime(2026, 10, 15, 6, 0, tzinfo=UTC)  # ingests August's trips
+    assert trips_month_for_run(last_monthly) == date(2026, 8, 1)
+    assert last_monthly < monthly_end_date(last) < datetime(2026, 11, 15, 6, 0, tzinfo=UTC)
