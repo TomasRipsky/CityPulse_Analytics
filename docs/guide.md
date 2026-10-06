@@ -377,7 +377,7 @@ console, so the whole environment can be destroyed and rebuilt.
 | Project | Holds | Used by |
 |---|---|---|
 | `citypulse-tr-dev` | a sample: weather and air quality for January and July 2025 and both daylight-saving weekends; trips for January 2025 | CI, which builds every pull request's dbt models here |
-| `citypulse-tr-prod` | the full dataset, January 2025 – August 2026 | the backfill, the site export, the dashboard |
+| `citypulse-tr-prod` | the frozen dataset: 16 months, January 2025 – April 2026 | the backfill, the site export, the dashboard |
 
 A GCP *project* is the unit of billing and permissions. Separate projects mean code under review
 can never read or overwrite the real data, and a mistake in dev cannot cost money in prod.
@@ -653,7 +653,7 @@ per query. Two choices keep a build cheap:
 > daily quota (which then did its job: every query stopped). Measuring bytes per query with
 > `bq ls -j` found the two causes above. A full build on dev's January 2025 sample now reads about
 > 1.6 GiB — 1 GiB of it the 10 MB minimum across ~110 queries — and the dev quota is 20 GiB.
-> A full build on prod's 20 months reads about 18 GB.
+> A full build on prod's 16 months reads about 15 GB.
 
 ### CI
 
@@ -800,7 +800,7 @@ instead of a clock: it runs because new data landed, not at a time when it hopef
 run at a time, the events that arrive during a run are handled by the next one, so a backfill of
 600 days does not mean 600 dbt builds.
 
-**The freeze is in code.** `CITYPULSE_LAST_DAY` (2026-08-31) becomes the DAGs' `end_date`, so a
+**The freeze is in code.** `CITYPULSE_LAST_DAY` (2026-04-30) becomes the DAGs' `end_date`, so a
 running Airflow never schedules past the dataset. Airflow treats `end_date` as *exclusive*: it is
 set a few hours after the last run (12:00 UTC), not exactly at it.
 
@@ -815,12 +815,15 @@ History is loaded with Airflow's own backfill — runs with past logical dates, 
 scheduled ones:
 
 ```bash
-airflow backfill create --dag-id citypulse_daily   --from-date 2025-01-02 --to-date 2026-09-01T12:00 --max-active-runs 12
-airflow backfill create --dag-id citypulse_monthly --from-date 2025-03-15 --to-date 2026-10-15T12:00 --max-active-runs 2
+airflow backfill create --dag-id citypulse_daily   --from-date 2025-01-02 --to-date 2026-05-01T12:00 --max-active-runs 12
+airflow backfill create --dag-id citypulse_monthly --from-date 2025-03-15 --to-date 2026-06-15T12:00 --max-active-runs 2
 ```
 
-608 daily runs (1 January 2025 – 31 August 2026) and 20 monthly runs (January 2025 – August 2026),
-with `citypulse_transform` paused until the end and then run once.
+The frozen dataset is **16 months, January 2025 – April 2026**: every season, with January–April
+seen in two years — enough to answer the question, at a fraction of the load time and storage of
+the full history. (The first backfill ran to August 2026; the extra months were dropped to keep
+one clean window — a partition can be removed for free with `bq rm 'raw.trips$202607'`.)
+`citypulse_transform` stays paused during a backfill and runs once at the end.
 
 > **Problems we hit.**
 > - **The laptop went to sleep.** Daily tasks take seconds and mostly survived; monthly tasks

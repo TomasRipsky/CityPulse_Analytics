@@ -8,7 +8,7 @@
 Version 1 ran Airflow 2.8 on an always-on free-tier VM, installed by hand, with tasks that ran
 `git pull` before importing the code — so two tasks of one run could execute different code, and
 nothing reported a failure outside the UI. Airflow 2 reached end of life in April 2026. The v2
-dataset is frozen (January 2025 – August 2026): it needs an orchestrator for the backfill and for
+dataset is frozen (16 months, January 2025 – April 2026): it needs an orchestrator for the backfill and for
 anyone who wants to run the pipeline, not a scheduler that runs forever.
 
 ## Decision

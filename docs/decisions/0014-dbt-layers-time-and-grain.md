@@ -40,5 +40,5 @@ production tables, not the change.
 ## Consequences
 - The analysis models read small tables (one row per hour or day), not 70 million trips.
 - A full build reads the raw trips once (into `stg_trips`) and then only the columns each model
-  or test needs: about 1.6 GiB on dev's sample, ~18 GB on prod's 20 months. The 20 GB per-query
+  or test needs: about 1.6 GiB on dev's sample, ~15 GB on prod's 16 months. The 20 GB per-query
   cap and the daily quota bound it.
