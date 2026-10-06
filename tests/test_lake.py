@@ -64,7 +64,7 @@ def test_uri_of_local_is_a_path(tmp_path):
 def test_layout():
     day, month = date(2025, 1, 15), date(2025, 1, 1)
     assert paths.bronze_day("weather", day) == "bronze/weather/date=2025-01-15/weather.json"
-    assert paths.bronze_trips(month) == "bronze/citibike/month=2025-01/202501-citibike-tripdata.zip"
+    assert paths.bronze_trips(month) == "bronze/citibike/month=2025-01/source.json"
     assert paths.silver_day("air_quality", day) == (
         "silver/air_quality/date=2025-01-15/part.parquet"
     )

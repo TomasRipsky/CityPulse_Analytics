@@ -1,6 +1,6 @@
 # 0003 — Airflow on a free-tier e2-micro VM, not Cloud Composer
 
-- **Status:** Accepted
+- **Status:** Superseded by [0017](0017-airflow-3-from-a-versioned-image.md)
 - **Date:** 2026-03-06 (recorded retroactively on 2026-10-04)
 
 ## Context

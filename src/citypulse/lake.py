@@ -2,7 +2,7 @@
 
 Layout
     bronze/<source>/date=YYYY-MM-DD/<source>.json            weather, air quality: as received
-    bronze/citibike/month=YYYY-MM/YYYYMM-citibike-tripdata.zip
+    bronze/citibike/month=YYYY-MM/source.json             the archive's record: URL, ETag, CRC-32s
     silver/<source>/date=YYYY-MM-DD/part.parquet             typed, true UTC instants
     silver/citibike/month=YYYY-MM/part-NNN.parquet           one part per CSV in the ZIP
     _manifests/<source>/<period>.json                        written last: "complete, and how much"
@@ -26,7 +26,8 @@ def bronze_day(source: str, day: date) -> str:
 
 
 def bronze_trips(month: date) -> str:
-    return f"bronze/citibike/month={month:%Y-%m}/{month:%Y%m}-citibike-tripdata.zip"
+    """The trip archive's source record: the ZIP itself stays at its public, immutable source."""
+    return f"bronze/citibike/month={month:%Y-%m}/source.json"
 
 
 def silver_day(source: str, day: date) -> str:

@@ -14,6 +14,7 @@ import math
 import random
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,15 @@ class NotPublishedError(Exception):
 
 class IncompleteDownloadError(OSError):
     """The body ended before Content-Length bytes arrived."""
+
+
+@dataclass(frozen=True)
+class DownloadInfo:
+    """What the server said about a downloaded file: enough to prove later which version we read."""
+
+    size: int
+    etag: str | None
+    last_modified: str | None
 
 
 def backoff_delay(
@@ -85,13 +95,13 @@ class Http:
             return response.content
         raise AssertionError("unreachable")
 
-    def download(self, url: str, dest: Path) -> int:
-        """Stream `url` into `dest`; return its size. Raises NotPublishedError on 403/404."""
+    def download(self, url: str, dest: Path) -> DownloadInfo:
+        """Stream `url` into `dest`. Raises NotPublishedError on 403/404."""
         partial = dest.with_name(dest.name + ".part")
         try:
             for attempt in range(1, self.max_attempts + 1):
                 try:
-                    size = self._download_once(url, partial)
+                    info = self._download_once(url, partial)
                 except (httpx.TransportError, IncompleteDownloadError) as exc:
                     if attempt == self.max_attempts:
                         raise
@@ -106,17 +116,18 @@ class Http:
                     )
                     continue
                 partial.replace(dest)
-                return size
+                return info
             raise AssertionError("unreachable")
         finally:
             partial.unlink(missing_ok=True)
 
-    def _download_once(self, url: str, partial: Path) -> int:
+    def _download_once(self, url: str, partial: Path) -> DownloadInfo:
         with self._client.stream("GET", url) as response:
             if response.status_code in (403, 404):  # S3 answers 403 for a missing public key
                 raise NotPublishedError(f"{url}: HTTP {response.status_code}")
             response.raise_for_status()
             expected = response.headers.get("Content-Length")
+            etag, modified = response.headers.get("ETag"), response.headers.get("Last-Modified")
             size = 0
             with partial.open("wb") as handle:
                 for chunk in response.iter_bytes(chunk_size=1 << 20):
@@ -124,7 +135,7 @@ class Http:
                     size += len(chunk)
         if expected is not None and size != int(expected):
             raise IncompleteDownloadError(f"{url}: got {size} of {expected} bytes")
-        return size
+        return DownloadInfo(size=size, etag=etag, last_modified=modified)
 
     def _wait(self, url: str, attempt: int, reason: str, retry_after: str | None) -> None:
         delay = backoff_delay(attempt, retry_after)

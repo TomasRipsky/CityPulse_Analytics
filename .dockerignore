@@ -1,0 +1,17 @@
+.git
+.venv
+.lake
+.internal
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+infra
+site
+docs
+tests
+transform/target
+transform/dbt_packages
+transform/logs
+transform/profiles.yml
+.env
+.env.*

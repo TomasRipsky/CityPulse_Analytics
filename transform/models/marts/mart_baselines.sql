@@ -12,13 +12,13 @@
 with hours as (
     select month, day_type, local_hour, trips, member_trips, casual_trips
     from {{ ref('fct_city_hour') }}
-    where trips_loaded and is_dry
+    where trips_loaded and is_dry and not service_closed
 ),
 
 days as (
     select month, day_type, trips, member_trips, casual_trips, wind_gusts_max_kmh, aqi_category
     from {{ ref('fct_city_day') }}
-    where trips_loaded and is_dry
+    where trips_loaded and is_dry and not service_closed
 ),
 
 reference_periods as (

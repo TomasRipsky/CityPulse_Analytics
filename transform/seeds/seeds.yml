@@ -16,3 +16,23 @@ seeds:
         data_tests: [unique, not_null]
       - name: holiday
         data_tests: [not_null]
+
+  - name: known_service_closures
+    description: >
+      Periods the Citi Bike system was shut down, in New York local time, with the public source
+      that says so. A day with no trips in a loaded month is data loss unless a closure covers it;
+      hours and days touched by a closure are left out of every effect and baseline (a closed
+      system is not riders choosing to stay home). Grain: one row per closure.
+    config:
+      column_types:
+        closed_from: datetime
+        closed_until: datetime
+        reason: string
+        source: string
+    columns:
+      - name: closed_from
+        data_tests: [unique, not_null]
+      - name: closed_until
+        data_tests: [not_null]
+      - name: source
+        data_tests: [not_null]

@@ -20,3 +20,5 @@ finish with `dbt run`.
 - Trips are always at least ~5 weeks behind weather; marts that join them are only complete
   for months older than that.
 - If the file is still missing on the 8th, the run fails and needs a manual re-run.
+
+The lag survives in version 2 (`citypulse_monthly`, decision 0017), run on the 15th instead of the 8th.
