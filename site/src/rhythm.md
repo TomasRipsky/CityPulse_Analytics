@@ -38,7 +38,7 @@ display(Plot.plot({
 }))
 ```
 
-On workdays the 8 a.m. and 5–6 p.m. peaks are commuters; rain flattens the evening peak more than the morning one, when people still have to get to work.
+On workdays the 8 a.m. and 5–6 p.m. peaks are commuters; rain cuts both, the morning one at least as hard. These are plain averages of every rainy and every dry hour (snow and the blizzard closure left out; wet hours shown only where there are at least five) — not matched by month like the comparisons on [What the weather does](./weather).
 
 ## The year, day by day
 

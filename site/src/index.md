@@ -47,9 +47,9 @@ display(Plot.plot({
 
 <div class="answers">
   <div class="answer"><div class="value">${fmt.signedPct(rain.effect_pct)}</div><div class="label">trips in an hour of rain (1–4 mm) than in the same hour when it is dry</div></div>
-  <div class="answer"><div class="value">${fmt.signedPct(snow.effect_pct)}</div><div class="label">trips on a day with 5 cm of snow or more</div></div>
-  <div class="answer warm"><div class="value">+${warmth.pct_per_degree.toFixed(1)}%</div><div class="label">trips for every °C a day is warmer than usual for its month</div></div>
-  <div class="answer"><div class="value">${fmt.signedPct(air.effect_pct)}</div><div class="label">on a "moderate" air-quality day: bad air does not keep riders home</div></div>
+  <div class="answer"><div class="value">${fmt.signedPct(snow.effect_pct)}</div><div class="label">trips on a day with 5 cm of snow or more (${snow.periods} days)</div></div>
+  <div class="answer warm"><div class="value">+${warmth.pct_per_degree.toFixed(1)}%</div><div class="label">trips for every °C a dry day feels warmer than usual for its month</div></div>
+  <div class="answer"><div class="value">${fmt.signedPct(air.effect_pct)}</div><div class="label">on a "moderate" air-quality day: it does not keep riders home</div></div>
 </div>
 
 <div class="tip" label="What am I looking at?">

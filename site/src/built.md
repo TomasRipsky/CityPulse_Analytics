@@ -27,7 +27,7 @@ flowchart LR
 ```
 
 <div class="answers">
-  <div class="answer"><div class="value">${fmt.millions(summary.trips)}</div><div class="label">trips, every one reconciled against the source files</div></div>
+  <div class="answer"><div class="value">${fmt.millions(summary.trips)}</div><div class="label">trips analysed (1 min – 3 h); every row loaded was reconciled against the source files</div></div>
   <div class="answer"><div class="value">${summary.days}</div><div class="label">New York days of hourly weather and air quality — 23 or 25 hours on the days the clocks change</div></div>
   <div class="answer"><div class="value">~150</div><div class="label">automated checks: Python tests, dbt unit, data and integrity tests</div></div>
   <div class="answer warm"><div class="value">≈ €0</div><div class="label">a month: free tiers, budgets and query quotas, nothing always on</div></div>

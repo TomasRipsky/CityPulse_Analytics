@@ -55,7 +55,7 @@ A drizzle is already enough to lose a quarter of the riders; steady rain halves 
 <div class="card"><h3>Wind (dry days)</h3>${effectChart("wind")}</div>
 <div class="card"><h3>Air quality (dry days)</h3>${effectChart("air quality")}</div>
 
-Snow is the strongest weather effect of all. Wind, surprisingly, barely matters until it blows a gale. And air quality does not keep riders home: "moderate" days are often the warm, sunny ones, when ozone builds up.
+Snow is the strongest weather effect of all (heavy-snow days are few — counts in the tooltips). Wind, surprisingly, barely matters. And "moderate" air quality does not keep riders home: those are often the warm, sunny days when ozone builds up, so warmth is mixed into this comparison.
 
 ## Warmer days, more riders
 
@@ -66,7 +66,7 @@ const casual = response.find((d) => d.rider === "casual");
 ```
 
 <div class="answers">
-  <div class="answer warm"><div class="value">+${all.pct_per_degree.toFixed(1)}%</div><div class="label">trips per °C warmer than usual for the month — all riders</div></div>
+  <div class="answer warm"><div class="value">+${all.pct_per_degree.toFixed(1)}%</div><div class="label">trips per °C of felt temperature above the month's usual, on dry days — all riders</div></div>
   <div class="answer"><div class="value">+${member.pct_per_degree.toFixed(1)}%</div><div class="label">members</div></div>
   <div class="answer warm"><div class="value">+${casual.pct_per_degree.toFixed(1)}%</div><div class="label">casual riders: the most sensitive to warmth</div></div>
 </div>

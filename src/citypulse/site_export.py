@@ -24,9 +24,12 @@ EXPORTS = {
     "hourly_profile.csv": """
         select if(day_type = 'workday', 'workday', 'weekend or holiday') as day_type, local_hour,
             round(avg(if(is_dry, trips, null))) as dry_trips,
-            round(avg(if(precipitation_mm >= 1, trips, null))) as wet_trips,
+            -- rain only (no snow), and only where at least 5 wet hours make an average
+            if(countif(precipitation_mm >= 1) >= 5,
+               round(avg(if(precipitation_mm >= 1, trips, null))), null) as wet_trips,
             countif(precipitation_mm >= 1) as wet_hours
-        from `{project}.marts.fct_city_hour` where trips_loaded
+        from `{project}.marts.fct_city_hour`
+        where trips_loaded and not service_closed and coalesce(snowfall_cm, 0) = 0
         group by 1, 2 order by 1, 2""",
     "effects.csv": """
         select condition, band, band_order, is_reference, rider, periods, trips, expected_trips,

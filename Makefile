@@ -78,8 +78,8 @@ airflow-dags: ## List the DAGs Airflow parsed, and any import errors
 	$(COMPOSE) exec airflow-scheduler airflow dags list
 	$(COMPOSE) exec airflow-scheduler airflow dags list-import-errors
 
-site-data: ## Export the showcase site's data from ENV's marts into site/src/data (committed)
-	uv run citypulse site-export --project $(PROJECT_ID) --out site/src/data
+site-data: ## Export the showcase site's data from the PROD marts into site/src/data (committed)
+	uv run citypulse site-export --project $(PROJECT_PREFIX)-prod --out site/src/data
 
 site: ## Build the showcase site into site/dist
 	cd site && npm ci --silent --ignore-scripts && npm run build
