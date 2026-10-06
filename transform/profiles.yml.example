@@ -1,0 +1,19 @@
+# Copied to profiles.yml by `make transform`. OAuth = your gcloud ADC locally (impersonating the
+# pipeline account, see docs/guide.md), Workload Identity Federation in CI.
+citypulse:
+  target: dev
+  outputs:
+    dev: &bigquery
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('CITYPULSE_BQ_PROJECT') }}"
+      dataset: staging
+      location: us-central1
+      threads: 4
+      job_execution_timeout_seconds: 600
+      maximum_bytes_billed: 20000000000 # 20 GB per query: a second cost guard next to the daily quota
+    prod:
+      <<: *bigquery
+    ci:
+      <<: *bigquery
+      dataset: "{{ env_var('DBT_CI_SCHEMA', 'ci_local') }}"

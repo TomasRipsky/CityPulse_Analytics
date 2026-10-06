@@ -1,4 +1,4 @@
-.PHONY: help setup test lint fmt ingest load bootstrap operator-check init plan apply destroy gh-vars
+.PHONY: help setup test lint fmt ingest load transform bootstrap operator-check init plan apply destroy gh-vars
 
 # Local settings (never committed): copy .env.example to .env. Make exports every variable in it.
 -include .env
@@ -49,6 +49,12 @@ ingest: ## Land data in the lake. Usage: make ingest ARGS="trips --from 2025-01"
 
 load: ## Load lake periods into ENV's BigQuery. Usage: make load ENV=dev ARGS="trips --from 2025-01"
 	uv run citypulse load $(ARGS) --lake gs://$(PROJECT_ID)-lake --project $(PROJECT_ID)
+
+transform/profiles.yml: transform/profiles.yml.example
+	cp $< $@
+
+transform: transform/profiles.yml ## Build and test the dbt models in ENV's BigQuery. Usage: make transform ENV=dev [ARGS="-s staging"]
+	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir . $(ARGS)
 
 bootstrap: ## One-off per ENV: create the project in the org, link billing, budget alert. BILLING_ACCOUNT=… ORG_ID=…
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }
