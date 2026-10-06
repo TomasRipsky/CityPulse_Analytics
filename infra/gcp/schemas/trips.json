@@ -1,0 +1,92 @@
+[
+  {
+    "name": "ride_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Trip id assigned by Citi Bike."
+  },
+  {
+    "name": "rideable_type",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "classic_bike or electric_bike."
+  },
+  {
+    "name": "started_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Trip start, UTC (source: New York wall-clock time)."
+  },
+  {
+    "name": "ended_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Trip end, UTC (source: New York wall-clock time)."
+  },
+  {
+    "name": "start_station_name",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Start station name; null for some dockless electric trips."
+  },
+  {
+    "name": "start_station_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Start station id (a string: e.g. 6182.02, JC024)."
+  },
+  {
+    "name": "end_station_name",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "End station name; null when the bike was not returned to a station."
+  },
+  {
+    "name": "end_station_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "End station id."
+  },
+  {
+    "name": "start_lat",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Start latitude."
+  },
+  {
+    "name": "start_lng",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "Start longitude."
+  },
+  {
+    "name": "end_lat",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "End latitude."
+  },
+  {
+    "name": "end_lng",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "End longitude."
+  },
+  {
+    "name": "member_casual",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "member (annual subscriber) or casual (single ride or day pass)."
+  },
+  {
+    "name": "source_month",
+    "type": "DATE",
+    "mode": "NULLABLE",
+    "description": "First day of the month of the file the trip came from (partition column)."
+  },
+  {
+    "name": "source_file",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "CSV file inside the monthly ZIP the trip came from."
+  }
+]

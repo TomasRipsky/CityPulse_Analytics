@@ -1,0 +1,50 @@
+[
+  {
+    "name": "source",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "weather, air_quality or citibike."
+  },
+  {
+    "name": "period",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Day (YYYY-MM-DD) or month (YYYY-MM) that was loaded."
+  },
+  {
+    "name": "partition_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Partition replaced: YYYYMMDD or YYYYMM (`partition` is a reserved word in BigQuery SQL)."
+  },
+  {
+    "name": "expected_rows",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Rows the lake manifest says the period holds (counted at the source)."
+  },
+  {
+    "name": "loaded_rows",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Rows the BigQuery load job wrote."
+  },
+  {
+    "name": "files",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "Parquet files loaded."
+  },
+  {
+    "name": "manifest_extracted_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "When the period was extracted from the source."
+  },
+  {
+    "name": "loaded_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "When the load finished."
+  }
+]

@@ -1,0 +1,4 @@
+"rider","days","pct_per_degree","correlation"
+"all",221,2.7,0.62
+"casual",221,3.97,0.67
+"member",221,2.5,0.6

@@ -1,0 +1,82 @@
+@import url("observablehq:default.css");
+@import url("observablehq:theme-air.css") (prefers-color-scheme: light);
+@import url("observablehq:theme-near-midnight.css") (prefers-color-scheme: dark);
+
+/* Series colours: the validated dataviz palette (slots 1–3), stepped for each surface. */
+:root {
+  /* one family everywhere: the system sans */
+  --serif: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sans-serif: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --series-1: #2a78d6; /* trips, members */
+  --series-2: #eb6834; /* casual riders, warmth */
+  --series-3: #1baf7a;
+  --ink-muted: #898781;
+  --grid: #e1e0d9;
+  --street: rgba(42, 120, 214, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --grid: #2c2c2a;
+    --street: rgba(57, 135, 229, 0.08);
+  }
+}
+
+/* The hero: a quiet Manhattan street grid behind the question. */
+.hero {
+  margin: 1rem 0 2rem;
+  padding: 2rem 1.5rem 1rem;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(90deg, var(--street) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(0deg, var(--street) 0 1px, transparent 1px 24px);
+}
+.hero .kicker {
+  margin: 0;
+  color: var(--series-1);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+.hero h1 {
+  max-width: 22ch;
+  margin: 0.4rem 0 0.6rem;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1.05;
+}
+.hero .lede {
+  max-width: 62ch;
+  font-size: 1.1rem;
+  color: var(--theme-foreground-muted);
+}
+
+/* Answers: one number, one sentence. */
+.answers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.answer {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--theme-foreground-faintest);
+  border-left: 4px solid var(--series-1);
+  border-radius: 8px;
+  background: var(--theme-background-alt);
+}
+.answer.warm { border-left-color: var(--series-2); }
+.answer .value {
+  font-size: 2.4rem;
+  font-weight: 650;
+  line-height: 1.1;
+}
+.answer .label {
+  margin-top: 0.3rem;
+  color: var(--theme-foreground-muted);
+  font-size: 0.95rem;
+}
+.big-number { font-size: 2rem; font-weight: 650; }
+.muted { color: var(--theme-foreground-muted); }

@@ -1,0 +1,94 @@
+version: 2
+
+models:
+  - name: int_weather_hours
+    description: >
+      New York weather per hour, keyed by the hour's start (UTC). Interval variables
+      (precipitation_mm, rain_mm, snowfall_cm, wind_gusts_kmh) are moved to the hour they
+      describe; null when the next reading is missing.
+    columns:
+      - name: hour_start
+        data_tests: [unique, not_null]
+      - name: local_date
+        data_tests: [not_null]
+
+  - name: int_weather_days
+    description: "New York weather per day. Grain: one row per local_date."
+    columns:
+      - name: local_date
+        data_tests: [unique, not_null]
+
+  - name: int_air_days
+    description: "New York air quality per day. Grain: one row per local_date."
+    columns:
+      - name: local_date
+        data_tests: [unique, not_null]
+      - name: aqi_category
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["good", "moderate", "unhealthy for sensitive groups", "unhealthy", "very unhealthy", "hazardous"]
+
+  - name: int_trips_hours
+    description: "Citi Bike trips per hour they started in. Grain: one row per hour_start (UTC) with trips."
+    columns:
+      - name: hour_start
+        data_tests: [unique, not_null]
+
+  - name: int_trips_days
+    description: "Citi Bike trips per New York day they started on. Grain: one row per local_date with trips."
+    columns:
+      - name: local_date
+        data_tests: [unique, not_null]
+
+  - name: int_calendar_days
+    description: >
+      Every New York day from the first to the last day with weather. Grain: one row per
+      local_date. day_type is holiday, weekend or workday; trips_loaded says whether the day's
+      Citi Bike month is in the warehouse.
+    columns:
+      - name: local_date
+        data_tests: [unique, not_null]
+      - name: day_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["workday", "weekend", "holiday"]
+
+unit_tests:
+  - name: interval_variables_move_to_the_hour_they_describe
+    model: int_weather_hours
+    given:
+      - input: ref('stg_weather_hourly')
+        rows:
+          - {observed_at: "2025-07-01 12:00:00", temperature_c: 25.0, precipitation_mm: 9.0, wind_gusts_kmh: 30.0}
+          - {observed_at: "2025-07-01 13:00:00", temperature_c: 26.0, precipitation_mm: 2.0, wind_gusts_kmh: 40.0}
+          - {observed_at: "2025-07-01 15:00:00", temperature_c: 27.0, precipitation_mm: 5.0, wind_gusts_kmh: 50.0}
+    expect:
+      rows:
+        # 12:00–13:00 rain comes from the 13:00 stamp
+        - {hour_start: "2025-07-01 12:00:00", temperature_c: 25.0, precipitation_mm: 2.0, wind_gusts_kmh: 40.0}
+        # the 14:00 reading is missing: the 13:00 hour's interval values are unknown
+        - {hour_start: "2025-07-01 13:00:00", temperature_c: 26.0, precipitation_mm: null, wind_gusts_kmh: null}
+        # last reading: nothing after it
+        - {hour_start: "2025-07-01 15:00:00", temperature_c: 27.0, precipitation_mm: null, wind_gusts_kmh: null}
+
+  - name: holidays_beat_weekends_and_trip_months_are_marked
+    model: int_calendar_days
+    given:
+      - input: ref('stg_weather_hourly')
+        rows:
+          - {local_date: "2025-07-03"}
+          - {local_date: "2025-07-06"}
+      - input: ref('us_holidays')
+        rows:
+          - {date: "2025-07-04", holiday: "Independence Day"}
+      - input: source('raw', 'load_audit')
+        rows:
+          - {source: "citibike", period: "2025-07", loaded_rows: 10}
+    expect:
+      rows:
+        - {local_date: "2025-07-03", day_type: "workday", trips_loaded: true}
+        - {local_date: "2025-07-04", day_type: "holiday", trips_loaded: true}
+        - {local_date: "2025-07-05", day_type: "weekend", trips_loaded: true}
+        - {local_date: "2025-07-06", day_type: "weekend", trips_loaded: true}

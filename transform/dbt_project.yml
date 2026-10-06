@@ -1,0 +1,37 @@
+name: citypulse
+version: "2.0.0"
+profile: citypulse
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  timezone: "America/New_York"
+
+seeds:
+  citypulse:
+    +schema: intermediate
+
+data_tests:
+  citypulse:
+    # Storing failures makes dbt rewrite generic tests as `select *`, so a not_null on the trips
+    # table would read every column (~25x the bytes). Only the integrity tests (small results)
+    # store their failing rows, in the `audit` dataset.
+    +store_failures: false
+    +schema: audit
+
+models:
+  citypulse:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
