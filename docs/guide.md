@@ -18,6 +18,7 @@ but has not seen this project. The README says *what* and *how to run*; this fil
 9. [Loading the warehouse](#9-loading-the-warehouse)
 10. [Modelling with dbt](#10-modelling-with-dbt)
 11. [How the weather effects are measured](#11-how-the-weather-effects-are-measured)
+12. [Orchestration with Airflow](#12-orchestration-with-airflow)
 
 ---
 
@@ -81,7 +82,7 @@ in production (a bucket) — only the root changes, through `CITYPULSE_LAKE_URI`
 ```
 bronze/weather/date=2025-01-15/weather.json
 bronze/air_quality/date=2025-01-15/air_quality.json
-bronze/citibike/month=2025-01/202501-citibike-tripdata.zip
+bronze/citibike/month=2025-01/source.json      (the archive's record; the ZIP stays at its source)
 silver/weather/date=2025-01-15/part.parquet
 silver/citibike/month=2025-01/part-000.parquet … part-002.parquet
 _manifests/weather/2025-01-15.json
@@ -253,7 +254,10 @@ and the last good version in the lake is untouched.
 **Publish — only after prepare succeeded:**
 
 1. **delete** the old manifest — from now on the period is "not ready";
-2. write **Bronze** (the response body or the ZIP, exactly as received);
+2. write **Bronze**: for weather and air quality the response body exactly as received; for trips
+   the archive's **source record** — URL, size, `ETag`, `Last-Modified`, and every entry's name,
+   size and CRC-32 — while the ZIP itself stays at its public source
+   ([decision 0016](decisions/0016-trip-archives-stay-at-the-source.md));
 3. write **Silver** (for trips: remove the month's old parts first, then one part per CSV);
 4. write the **manifest**, last.
 
@@ -292,7 +296,7 @@ the CSV parser. If the parser produced a different number, ingestion stops with 
     {"name": "202501-citibike-tripdata_2.csv", "rows": 1000000, "uncompressed_bytes": 194993655},
     {"name": "202501-citibike-tripdata_3.csv", "rows": 124475,  "uncompressed_bytes": 24209588}
   ],
-  "bronze": "bronze/citibike/month=2025-01/202501-citibike-tripdata.zip",
+  "bronze": "bronze/citibike/month=2025-01/source.json",
   "silver": ["silver/citibike/month=2025-01/part-000.parquet", "…part-001…", "…part-002…"]
 }
 ```
@@ -726,3 +730,110 @@ Temperature *is* the season, so it gets two views:
   left out of the sums.
 - A day whose weather is not fully known (its last hour's rain is missing) is never counted as
   dry or wet: its totals are null.
+
+---
+
+## 12. Orchestration with Airflow
+
+[Apache Airflow](https://airflow.apache.org/) decides **when** each step runs, in which order,
+what to retry, and keeps the history of every run. CityPulse uses Airflow 3.3, on the operator's
+machine with Docker Compose ([decision 0017](decisions/0017-airflow-3-from-a-versioned-image.md)).
+
+```bash
+make airflow-up ENV=prod      # build the image from this commit, start Airflow on 127.0.0.1:8080
+make airflow-dags ENV=prod    # the DAGs Airflow parsed, and any import errors
+make airflow-down ENV=prod    # stop it (the run history stays in its database volume)
+```
+
+### The image is the deployment
+
+`orchestration/Dockerfile` starts from the official `apache/airflow:3.3.2` image and adds:
+
+- the `citypulse` package and dbt, installed with `uv sync --locked` into **their own
+  environment** (`/opt/citypulse/.venv`) — exactly the versions the tests ran with, and no
+  dependency fight with the hundreds of packages Airflow brings;
+- the dbt project and the DAG files.
+
+Tasks call `/opt/citypulse/.venv/bin/citypulse …` and `…/dbt build`; the DAG files never import
+the pipeline code. Changing the code means building a new image — `make airflow-up` does it —
+and the image carries the commit it came from (`org.opencontainers.image.revision`, with `-dirty`
+if the working tree had uncommitted changes). Every task log names the image it ran. Version 1
+did the opposite: tasks ran `git pull` before importing the code, so two tasks of one run could run
+different code.
+
+The compose file is the official one with three changes: **LocalExecutor** (tasks run as
+processes on the same machine; no Celery workers, redis or flower), the CityPulse image, and a
+login-free UI bound to `127.0.0.1` only. The containers read the host's Application Default
+Credentials, mounted read-only.
+
+### Three DAGs
+
+```mermaid
+flowchart LR
+  subgraph daily["citypulse_daily — 06:00 UTC"]
+    iw[ingest_weather] --> lw[load_weather]
+    ia[ingest_air_quality] --> la[load_air_quality]
+  end
+  subgraph monthly["citypulse_monthly — 15th, 06:00 UTC"]
+    it[ingest_trips] --> lt[load_trips]
+  end
+  lw -- "Asset raw/weather_hourly" --> t
+  la -- "Asset raw/air_quality_hourly" --> t
+  lt -- "Asset raw/trips" --> t
+  subgraph transform["citypulse_transform — when new data lands"]
+    t[dbt_build]
+  end
+```
+
+| DAG | Runs | Works on |
+|---|---|---|
+| `citypulse_daily` | every day at 06:00 UTC | the New York day that just ended (06:00 UTC is 01:00 or 02:00 in New York) |
+| `citypulse_monthly` | the 15th at 06:00 UTC | the trips of the month two months back (Citi Bike publishes ~6 weeks late) |
+| `citypulse_transform` | whenever a load task succeeded | `dbt build`: every model and every test |
+
+The date rules are plain functions in `orchestration/dags/citypulse_dates.py`, tested by the
+repository's normal test suite without Airflow.
+
+**Assets.** The load tasks declare the raw table they update as an *outlet*, an Airflow
+**Asset** (`bigquery://<project>/raw/trips`). `citypulse_transform` is scheduled on those Assets
+instead of a clock: it runs because new data landed, not at a time when it hopefully has. With one
+run at a time, the events that arrive during a run are handled by the next one, so a backfill of
+600 days does not mean 600 dbt builds.
+
+**The freeze is in code.** `CITYPULSE_LAST_DAY` (2026-08-31) becomes the DAGs' `end_date`, so a
+running Airflow never schedules past the dataset. Airflow treats `end_date` as *exclusive*: it is
+set a few hours after the last run (12:00 UTC), not exactly at it.
+
+**Failures** retry twice with exponential backoff; a task that hangs is stopped by its
+`execution_timeout` (20 minutes daily, 90 monthly, 60 dbt); every failure writes a one-line summary
+(DAG, task, run, attempt, image) to the log. Ingestion's own guards still apply inside Airflow: a
+day that is not over or a month not yet published fails clearly, leaving nothing half-written.
+
+### The backfill
+
+History is loaded with Airflow's own backfill — runs with past logical dates, executed like
+scheduled ones:
+
+```bash
+airflow backfill create --dag-id citypulse_daily   --from-date 2025-01-02 --to-date 2026-09-01T12:00 --max-active-runs 12
+airflow backfill create --dag-id citypulse_monthly --from-date 2025-03-15 --to-date 2026-10-15T12:00 --max-active-runs 2
+```
+
+608 daily runs (1 January 2025 – 31 August 2026) and 20 monthly runs (January 2025 – August 2026),
+with `citypulse_transform` paused until the end and then run once.
+
+> **Problems we hit.**
+> - **The laptop went to sleep.** Daily tasks take seconds and mostly survived; monthly tasks
+>   take minutes and hung for 30–77 minutes at a time until Airflow killed them — macOS's power
+>   log showed the machine sleeping and waking all morning. Three days and four months failed
+>   after their retries. Fixes: keep the machine awake while tasks run (`caffeinate -dims`),
+>   `execution_timeout` so a hang fails fast, and progress lines in the monthly ingest (download,
+>   each CSV, publish) so the log shows where a task is. Then only the failed tasks were cleared
+>   and re-run (`airflow tasks clear --only-failed`): every step is idempotent, so a re-run is safe.
+> - **A BigQuery `409 Already Exists: Job`.** After a dropped connection the client re-sent a job
+>   that had in fact been created. The task's retry loaded the period again, which the partition
+>   decorator makes harmless.
+> - **The last month did not run.** The monthly DAG's `end_date` was set exactly at its last run,
+>   and Airflow treats it as exclusive. It now sits a few hours later, with a test.
+> - **One backfill per DAG.** Airflow refuses a second backfill while one is running; a single
+>   missing run is triggered by hand with its logical date (`airflow dags trigger --logical-date`).
