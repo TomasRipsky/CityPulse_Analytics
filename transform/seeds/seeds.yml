@@ -16,3 +16,18 @@ seeds:
         data_tests: [unique, not_null]
       - name: holiday
         data_tests: [not_null]
+
+  - name: known_service_closures
+    description: >
+      Days the Citi Bike system was shut down, with the public source that says so. A day with no
+      trips in a loaded month is data loss unless it is listed here. Grain: one row per date.
+    config:
+      column_types:
+        date: date
+        reason: string
+        source: string
+    columns:
+      - name: date
+        data_tests: [unique, not_null]
+      - name: source
+        data_tests: [not_null]
