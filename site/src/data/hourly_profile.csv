@@ -1,0 +1,49 @@
+"day_type","local_hour","dry_trips","wet_trips","wet_hours"
+"weekend or holiday",0,2896,,3
+"weekend or holiday",1,2018,,4
+"weekend or holiday",2,1346,,3
+"weekend or holiday",3,893,,3
+"weekend or holiday",4,620,,1
+"weekend or holiday",5,518,,2
+"weekend or holiday",6,1015,,2
+"weekend or holiday",7,1887,,4
+"weekend or holiday",8,3212,,2
+"weekend or holiday",9,4956,,2
+"weekend or holiday",10,6613,,0
+"weekend or holiday",11,7839,,2
+"weekend or holiday",12,8509,,3
+"weekend or holiday",13,9134,,1
+"weekend or holiday",14,8996,,3
+"weekend or holiday",15,9033,4411,6
+"weekend or holiday",16,8792,6581,9
+"weekend or holiday",17,8498,4754,6
+"weekend or holiday",18,8061,5853,6
+"weekend or holiday",19,6869,2516,5
+"weekend or holiday",20,5243,2032,6
+"weekend or holiday",21,4054,1526,5
+"weekend or holiday",22,3487,,4
+"weekend or holiday",23,2791,802,5
+"workday",0,1328,677,10
+"workday",1,682,573,6
+"workday",2,399,345,8
+"workday",3,264,177,6
+"workday",4,355,242,6
+"workday",5,1149,499,5
+"workday",6,3245,,4
+"workday",7,6662,2491,6
+"workday",8,10248,5055,10
+"workday",9,7533,4586,14
+"workday",10,5291,2654,8
+"workday",11,5221,3993,12
+"workday",12,5822,3078,5
+"workday",13,6286,6552,8
+"workday",14,6976,6036,9
+"workday",15,7936,4211,8
+"workday",16,9573,7163,6
+"workday",17,13098,8095,12
+"workday",18,12284,6414,7
+"workday",19,9224,3596,7
+"workday",20,6483,3949,8
+"workday",21,4868,3335,8
+"workday",22,3954,2540,9
+"workday",23,2806,2019,12

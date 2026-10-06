@@ -4,6 +4,7 @@
     citypulse ingest air-quality --from 2025-01-01 [--to 2025-01-31]
     citypulse ingest trips       --from 2025-01    [--to 2025-03]
     citypulse load   <same sources and ranges>     --project P          lake → BigQuery raw
+    citypulse site-export --project P [--out site/src/data]               marts → site data
 
 The lake is `--lake`, else $CITYPULSE_LAKE_URI, else the local folder `.lake`.
 The BigQuery project is `--project`, else $CITYPULSE_BQ_PROJECT.
@@ -83,6 +84,9 @@ def _parser() -> argparse.ArgumentParser:
             src.add_argument("--lake", default=os.environ.get("CITYPULSE_LAKE_URI", ".lake"))
             if command == "load":
                 src.add_argument("--project", default=os.environ.get("CITYPULSE_BQ_PROJECT"))
+    site = commands.add_parser("site-export", help="write the showcase site's data from the marts")
+    site.add_argument("--project", default=os.environ.get("CITYPULSE_BQ_PROJECT"))
+    site.add_argument("--out", type=Path, default=Path("site/src/data"))
     return parser
 
 
@@ -93,6 +97,14 @@ def main(argv: list[str] | None = None) -> int:
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request is noise
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.command == "site-export":
+        if not args.project:
+            parser.error("site-export needs --project or $CITYPULSE_BQ_PROJECT")
+        from citypulse.site_export import export
+
+        for name in export(bigquery_client(args.project), args.project, args.out):
+            log.info("site data: %s", args.out / name)
+        return 0
     end = args.end or args.start
     if end < args.start:
         parser.error("--to is before --from")

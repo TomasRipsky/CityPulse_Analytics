@@ -1,0 +1,43 @@
+"condition","band","band_order","is_reference","rider","periods","trips","expected_trips","effect_pct"
+"air quality","good (reference)",0,true,"all",66,7539639,7539639,0
+"air quality","good (reference)",0,true,"casual",66,1116499,1116499,0
+"air quality","good (reference)",0,true,"member",66,6423140,6423140,0
+"air quality","moderate",1,false,"all",67,7967357,7607144,4.7
+"air quality","moderate",1,false,"casual",67,1254020,1179169,6.3
+"air quality","moderate",1,false,"member",67,6713337,6427975,4.4
+"air quality","unhealthy for sensitive groups",2,false,"all",3,411161,369846,11.2
+"air quality","unhealthy for sensitive groups",2,false,"casual",3,65651,64098,2.4
+"air quality","unhealthy for sensitive groups",2,false,"member",3,345510,305748,13
+"rain","dry (reference)",0,true,"all",7533,39431977,39431977,0
+"rain","dry (reference)",0,true,"casual",7533,6940468,6940468,0
+"rain","dry (reference)",0,true,"member",7533,32491509,32491509,0
+"rain","drizzle (< 1 mm/h)",1,false,"all",760,3888624,5143257,-24.4
+"rain","drizzle (< 1 mm/h)",1,false,"casual",760,660929,990378,-33.3
+"rain","drizzle (< 1 mm/h)",1,false,"member",760,3227695,4152879,-22.3
+"rain","rain (1–4 mm/h)",2,false,"all",242,809079,1487298,-45.6
+"rain","rain (1–4 mm/h)",2,false,"casual",242,134468,277924,-51.6
+"rain","rain (1–4 mm/h)",2,false,"member",242,674611,1209374,-44.2
+"rain","heavy rain (≥ 4 mm/h)",3,false,"all",39,163352,262222,-37.7
+"rain","heavy rain (≥ 4 mm/h)",3,false,"casual",39,26553,47108,-43.6
+"rain","heavy rain (≥ 4 mm/h)",3,false,"member",39,136799,215114,-36.4
+"snow","dry (reference)",0,true,"all",227,29770907,29770907,0
+"snow","dry (reference)",0,true,"casual",227,5386266,5386266,0
+"snow","dry (reference)",0,true,"member",227,24384641,24384641,0
+"snow","light snow (< 5 cm)",1,false,"all",28,1719740,2116558,-18.7
+"snow","light snow (< 5 cm)",1,false,"casual",28,184790,259498,-28.8
+"snow","light snow (< 5 cm)",1,false,"member",28,1534950,1857060,-17.3
+"snow","snowfall ≥ 5 cm",2,false,"all",4,88497,231952,-61.8
+"snow","snowfall ≥ 5 cm",2,false,"casual",4,9291,25925,-64.2
+"snow","snowfall ≥ 5 cm",2,false,"member",4,79206,206027,-61.6
+"wind","calm (reference, gusts < 40 km/h)",0,true,"all",139,18902190,18902190,0
+"wind","calm (reference, gusts < 40 km/h)",0,true,"casual",139,3457159,3457159,0
+"wind","calm (reference, gusts < 40 km/h)",0,true,"member",139,15445031,15445031,0
+"wind","breezy (40–55 km/h)",1,false,"all",57,7738686,7655713,1.1
+"wind","breezy (40–55 km/h)",1,false,"casual",57,1322434,1334089,-0.9
+"wind","breezy (40–55 km/h)",1,false,"member",57,6416252,6321624,1.5
+"wind","windy (55–70 km/h)",2,false,"all",11,1102063,1157622,-4.8
+"wind","windy (55–70 km/h)",2,false,"casual",11,158476,153777,3.1
+"wind","windy (55–70 km/h)",2,false,"member",11,943587,1003845,-6
+"wind","gale (≥ 70 km/h)",3,false,"all",1,157113,169438,-7.3
+"wind","gale (≥ 70 km/h)",3,false,"casual",1,26464,26050,1.6
+"wind","gale (≥ 70 km/h)",3,false,"member",1,130649,143388,-8.9
