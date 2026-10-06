@@ -1,4 +1,4 @@
-.PHONY: help setup test lint fmt ingest load transform airflow-build airflow-up airflow-down airflow-dags bootstrap operator-check init plan apply destroy gh-vars
+.PHONY: help setup test lint fmt ingest load transform site-data airflow-build airflow-up airflow-down airflow-dags bootstrap operator-check init plan apply destroy gh-vars
 
 # Local settings (never committed): copy .env.example to .env. Make exports every variable in it.
 -include .env
@@ -77,6 +77,9 @@ airflow-down: ## Stop Airflow for ENV (keeps its metadata database)
 airflow-dags: ## List the DAGs Airflow parsed, and any import errors
 	$(COMPOSE) exec airflow-scheduler airflow dags list
 	$(COMPOSE) exec airflow-scheduler airflow dags list-import-errors
+
+site-data: ## Export the showcase site's data from ENV's marts into site/src/data (committed)
+	uv run citypulse site-export --project $(PROJECT_ID) --out site/src/data
 
 bootstrap: ## One-off per ENV: create the project in the org, link billing, budget alert. BILLING_ACCOUNT=… ORG_ID=…
 	@test -n "$(BILLING_ACCOUNT)" || { echo "set BILLING_ACCOUNT (see: gcloud billing accounts list)"; exit 1; }
