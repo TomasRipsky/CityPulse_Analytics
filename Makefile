@@ -57,7 +57,7 @@ transform: transform/profiles.yml ## Build and test the dbt models in ENV's BigQ
 	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir . $(ARGS)
 
 GIT_REVISION := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD -- . ':!.internal' || echo -dirty)
-# The frozen dataset: 16 months, January 2025 to April 2026 — every season, with a year-on-year overlap.
+# The frozen dataset: one year, May 2025 to April 2026 — every season.
 CITYPULSE_LAST_DAY ?= 2026-04-30
 COMPOSE := CITYPULSE_ENV=$(ENV) CITYPULSE_BQ_PROJECT=$(PROJECT_ID) CITYPULSE_LAKE_URI=gs://$(PROJECT_ID)-lake CITYPULSE_LAST_DAY=$(CITYPULSE_LAST_DAY) \
 	docker compose -p citypulse-$(ENV) -f orchestration/docker-compose.yaml

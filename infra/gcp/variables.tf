@@ -42,6 +42,6 @@ variable "query_quota_mib_per_day" {
   type        = map(number)
   default = {
     dev  = 20480 # 20 GiB: a full dbt build on the January 2025 sample scans ~1 GB; CI + local work
-    prod = 51200 # 50 GiB: a full dbt build on 16 months reads ~15 GB
+    prod = 51200 # 50 GiB: a full dbt build on a year of data reads ~12 GB
   }
 }

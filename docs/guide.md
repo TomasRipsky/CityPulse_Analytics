@@ -377,7 +377,7 @@ console, so the whole environment can be destroyed and rebuilt.
 | Project | Holds | Used by |
 |---|---|---|
 | `citypulse-tr-dev` | a sample: weather and air quality for January and July 2025 and both daylight-saving weekends; trips for January 2025 | CI, which builds every pull request's dbt models here |
-| `citypulse-tr-prod` | the frozen dataset: 16 months, January 2025 – April 2026 | the backfill, the site export, the dashboard |
+| `citypulse-tr-prod` | the frozen dataset: one year, May 2025 – April 2026 | the backfill, the site export, the dashboard |
 
 A GCP *project* is the unit of billing and permissions. Separate projects mean code under review
 can never read or overwrite the real data, and a mistake in dev cannot cost money in prod.
@@ -653,7 +653,7 @@ per query. Two choices keep a build cheap:
 > daily quota (which then did its job: every query stopped). Measuring bytes per query with
 > `bq ls -j` found the two causes above. A full build on dev's January 2025 sample now reads about
 > 1.6 GiB — 1 GiB of it the 10 MB minimum across ~110 queries — and the dev quota is 20 GiB.
-> A full build on prod's 16 months reads about 15 GB.
+> A full build on prod's year of data reads about 12 GB.
 
 ### CI
 
@@ -815,14 +815,16 @@ History is loaded with Airflow's own backfill — runs with past logical dates, 
 scheduled ones:
 
 ```bash
-airflow backfill create --dag-id citypulse_daily   --from-date 2025-01-02 --to-date 2026-05-01T12:00 --max-active-runs 12
-airflow backfill create --dag-id citypulse_monthly --from-date 2025-03-15 --to-date 2026-06-15T12:00 --max-active-runs 2
+airflow backfill create --dag-id citypulse_daily   --from-date 2025-05-02 --to-date 2026-05-01T12:00 --max-active-runs 12
+airflow backfill create --dag-id citypulse_monthly --from-date 2025-07-15 --to-date 2026-06-15T12:00 --max-active-runs 2
 ```
 
-The frozen dataset is **16 months, January 2025 – April 2026**: every season, with January–April
-seen in two years — enough to answer the question, at a fraction of the load time and storage of
-the full history. (The first backfill ran to August 2026; the extra months were dropped to keep
-one clean window — a partition can be removed for free with `bq rm 'raw.trips$202607'`.)
+The frozen dataset is **one year, May 2025 – April 2026**: 365 New York days of weather and air
+quality and 12 months of trips (44.6 million), every season once — enough to answer the
+question at a fraction of the load time and storage of the full history. (The first backfill
+reached further; the warehouse keeps one clean window — a partition outside it is removed for free
+with `bq rm 'raw.trips$202607'`, and the lake still holds those periods, so reloading one is a
+`citypulse load`, no new download.)
 `citypulse_transform` stays paused during a backfill and runs once at the end.
 
 > **Problems we hit.**

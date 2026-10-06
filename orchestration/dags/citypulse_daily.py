@@ -18,7 +18,7 @@ SOURCES = {"weather": "weather_hourly", "air-quality": "air_quality_hourly"}
 @dag(
     dag_id="citypulse_daily",
     schedule="0 6 * * *",
-    start_date=datetime(2025, 1, 2, tzinfo=UTC),
+    start_date=datetime(2025, 5, 2, tzinfo=UTC),
     end_date=daily_end_date(LAST_DAY) if LAST_DAY else None,
     catchup=False,
     max_active_runs=16,

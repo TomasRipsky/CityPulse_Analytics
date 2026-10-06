@@ -17,7 +17,7 @@ from citypulse_dates import monthly_end_date, trips_month_for_run
 @dag(
     dag_id="citypulse_monthly",
     schedule="0 6 15 * *",
-    start_date=datetime(2025, 3, 15, tzinfo=UTC),
+    start_date=datetime(2025, 7, 15, tzinfo=UTC),
     end_date=monthly_end_date(LAST_DAY) if LAST_DAY else None,
     catchup=False,
     max_active_runs=2,
