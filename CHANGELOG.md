@@ -3,7 +3,7 @@
 All notable changes to CityPulse. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
-## [2.0.0] - 2026-10-07
+## [2.0.0] - 2026-10-06
 
 A rebuild of the whole pipeline with tests, correct data and an answer to the project's question.
 
