@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from airflow.sdk import dag, task
-from citypulse_common import CLI, DEFAULT_ARGS, LAKE, LAST_DAY, PROJECT, RAW, run_moment
+from citypulse_common import CLI, DEFAULT_ARGS, LAKE, LAST_DAY, PROJECT, RAW, logged, run_moment
 from citypulse_dates import monthly_end_date, trips_month_for_run
 
 
@@ -30,12 +30,12 @@ def citypulse_monthly():
     @task.bash
     def ingest_trips(**context) -> str:
         month = trips_month_for_run(run_moment(context))
-        return f"{CLI} ingest trips --from {month:%Y-%m} --lake {LAKE}"
+        return logged(f"{CLI} ingest trips --from {month:%Y-%m} --lake {LAKE}")
 
     @task.bash(outlets=[RAW["trips"]])
     def load_trips(**context) -> str:
         month = trips_month_for_run(run_moment(context))
-        return f"{CLI} load trips --from {month:%Y-%m} --lake {LAKE} --project {PROJECT}"
+        return logged(f"{CLI} load trips --from {month:%Y-%m} --lake {LAKE} --project {PROJECT}")
 
     ingest_trips() >> load_trips()
 

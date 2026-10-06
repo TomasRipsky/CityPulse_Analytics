@@ -57,6 +57,11 @@ DEFAULT_ARGS = {
 }
 
 
+def logged(command: str) -> str:
+    """A bash command whose log starts with the image (git commit) it ran from."""
+    return f"echo image $CITYPULSE_REVISION && {command}"
+
+
 def run_moment(context):
     """When the run is "for": its logical date, or (manual runs without one) when it started."""
     return context.get("logical_date") or context["dag_run"].run_after

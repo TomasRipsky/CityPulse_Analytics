@@ -10,12 +10,13 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from airflow.sdk import dag, task
-from citypulse_common import DBT_DIR, DEFAULT_ARGS, ENV, RAW, VENV_BIN
+from citypulse_common import DBT_DIR, DEFAULT_ARGS, ENV, RAW, VENV_BIN, logged
 
 
 @dag(
     dag_id="citypulse_transform",
-    schedule=(RAW["weather_hourly"] | RAW["air_quality_hourly"] | RAW["trips"]),
+    # a day is ready when both daily tables landed; a month when its trips did
+    schedule=((RAW["weather_hourly"] & RAW["air_quality_hourly"]) | RAW["trips"]),
     start_date=datetime(2025, 1, 1, tzinfo=UTC),
     catchup=False,
     max_active_runs=1,
@@ -27,7 +28,7 @@ from citypulse_common import DBT_DIR, DEFAULT_ARGS, ENV, RAW, VENV_BIN
 def citypulse_transform():
     @task.bash
     def dbt_build() -> str:
-        return f"cd {DBT_DIR} && {VENV_BIN}/dbt build --target {ENV} --profiles-dir ."
+        return logged(f"cd {DBT_DIR} && {VENV_BIN}/dbt build --target {ENV} --profiles-dir .")
 
     dbt_build()
 

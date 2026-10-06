@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import signal
 import sys
 import tempfile
 from datetime import UTC, date, datetime, timedelta
@@ -86,6 +87,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Airflow stops a task with SIGTERM: exit through Python so `finally` blocks clean up.
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request is noise
     parser = _parser()

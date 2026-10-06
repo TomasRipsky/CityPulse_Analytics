@@ -7,10 +7,10 @@
 -- construction its effect is ~0.
 with hours as (
     select * from {{ ref('fct_city_hour') }}
-    where trips_loaded and precipitation_mm is not null and coalesce(snowfall_cm, 0) = 0
+    where trips_loaded and not service_closed and precipitation_mm is not null and coalesce(snowfall_cm, 0) = 0
 ),
 
-days as (select * from {{ ref('fct_city_day') }} where trips_loaded),
+days as (select * from {{ ref('fct_city_day') }} where trips_loaded and not service_closed),
 baselines as (select * from {{ ref('mart_baselines') }}),
 
 periods as (

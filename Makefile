@@ -56,7 +56,8 @@ transform/profiles.yml: transform/profiles.yml.example
 transform: transform/profiles.yml ## Build and test the dbt models in ENV's BigQuery. Usage: make transform ENV=dev [ARGS="-s staging"]
 	cd transform && uv run dbt deps --quiet && uv run dbt build --target $(ENV) --profiles-dir . $(ARGS)
 
-GIT_REVISION := $(shell git rev-parse --short HEAD)$(shell git diff --quiet HEAD -- . ':!.internal' || echo -dirty)
+# -dirty when anything (tracked or not) differs from the commit, so the label never lies.
+GIT_REVISION = $(shell git rev-parse --short HEAD)$(shell test -z "$$(git status --porcelain -- . ':!.internal')" || echo -dirty)
 # The frozen dataset: one year, May 2025 to April 2026 — every season.
 CITYPULSE_LAST_DAY ?= 2026-04-30
 COMPOSE := CITYPULSE_ENV=$(ENV) CITYPULSE_BQ_PROJECT=$(PROJECT_ID) CITYPULSE_LAKE_URI=gs://$(PROJECT_ID)-lake CITYPULSE_LAST_DAY=$(CITYPULSE_LAST_DAY) \
@@ -66,6 +67,7 @@ airflow-build: ## Build the Airflow image for ENV from this commit (the deployed
 	docker build -f orchestration/Dockerfile --build-arg GIT_REVISION=$(GIT_REVISION) -t citypulse-airflow:$(ENV) .
 
 airflow-up: airflow-build ## Start Airflow for ENV on http://127.0.0.1:8080 (uses your gcloud ADC)
+	@test -f $(HOME)/.config/gcloud/application_default_credentials.json || { echo "no ADC file: run gcloud auth application-default login first"; exit 1; }
 	$(COMPOSE) up -d --wait
 	@echo "Tasks run on this machine: keep it awake while they run (macOS: caffeinate -dims)."
 

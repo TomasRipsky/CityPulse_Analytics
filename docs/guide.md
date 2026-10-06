@@ -730,6 +730,9 @@ Temperature *is* the season, so it gets two views:
   left out of the sums.
 - A day whose weather is not fully known (its last hour's rain is missing) is never counted as
   dry or wet: its totals are null.
+- Periods inside a known system closure (`seeds/known_service_closures.csv`: the blizzard of
+  22–24 February 2026) are left out of every effect and baseline — a closed system is not riders
+  choosing to stay home.
 
 ---
 

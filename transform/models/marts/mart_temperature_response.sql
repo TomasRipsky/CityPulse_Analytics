@@ -5,7 +5,7 @@
 -- "a day 1 °C warmer than usual for its month has this many % more trips".
 with days as (
     select * from {{ ref('fct_city_day') }}
-    where trips_loaded and is_dry and apparent_temperature_mean_c is not null and day_type != 'holiday'
+    where trips_loaded and not service_closed and is_dry and apparent_temperature_mean_c is not null and day_type != 'holiday'
 ),
 
 long as (

@@ -13,6 +13,8 @@ x-airflow-common:
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://airflow-apiserver:8080/execution/'
+    # A known default secret and an all-admin UI are only acceptable because the API server is bound to
+    # 127.0.0.1 (it also serves the task execution API). Never change the port binding without both.
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:-local-only-not-a-secret}
     AIRFLOW__API_AUTH__JWT_ISSUER: airflow
     AIRFLOW__CORE__AUTH_MANAGER: airflow.api_fastapi.auth.managers.simple.simple_auth_manager.SimpleAuthManager

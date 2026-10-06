@@ -2,6 +2,7 @@
 -- Trips are 0 on a day with none in a loaded month (e.g. an outage) and null when the day's month
 -- was never loaded: "no data" and "nobody rode" stay different.
 with calendar as (select * from {{ ref('int_calendar_days') }}),
+closures as (select * from {{ ref('known_service_closures') }}),
 weather as (select * from {{ ref('int_weather_days') }}),
 air as (select * from {{ ref('int_air_days') }}),
 trips as (select * from {{ ref('int_trips_days') }})
@@ -14,6 +15,12 @@ select
     c.month,
     c.season,
     c.trips_loaded,
+    -- any part of the day inside a known system closure: left out of every effect and baseline
+    exists(
+        select 1 from closures x
+        where x.closed_from < datetime(date_add(c.local_date, interval 1 day))
+          and x.closed_until > datetime(c.local_date)
+    ) as service_closed,
     if(c.trips_loaded, coalesce(t.trips, 0), null) as trips,
     if(c.trips_loaded, coalesce(t.member_trips, 0), null) as member_trips,
     if(c.trips_loaded, coalesce(t.casual_trips, 0), null) as casual_trips,

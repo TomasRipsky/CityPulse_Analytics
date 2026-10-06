@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from airflow.sdk import dag, task
-from citypulse_common import CLI, DEFAULT_ARGS, LAKE, LAST_DAY, PROJECT, RAW, run_moment
+from citypulse_common import CLI, DEFAULT_ARGS, LAKE, LAST_DAY, PROJECT, RAW, logged, run_moment
 from citypulse_dates import daily_end_date, ny_day_for_run
 
 SOURCES = {"weather": "weather_hourly", "air-quality": "air_quality_hourly"}
@@ -34,12 +34,12 @@ def citypulse_daily():
         @task.bash(task_id=f"ingest_{name}")
         def ingest(source=source, **context) -> str:
             day = ny_day_for_run(run_moment(context))
-            return f"{CLI} ingest {source} --from {day} --lake {LAKE}"
+            return logged(f"{CLI} ingest {source} --from {day} --lake {LAKE}")
 
         @task.bash(task_id=f"load_{name}", outlets=[RAW[table]])
         def load(source=source, **context) -> str:
             day = ny_day_for_run(run_moment(context))
-            return f"{CLI} load {source} --from {day} --lake {LAKE} --project {PROJECT}"
+            return logged(f"{CLI} load {source} --from {day} --lake {LAKE} --project {PROJECT}")
 
         ingest() >> load()
 

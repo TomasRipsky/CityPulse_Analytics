@@ -63,7 +63,7 @@ unit_tests:
     given:
       - input: ref('fct_city_hour')
         rows:
-          - {trips_loaded: true, precipitation_mm: 2.0, snowfall_cm: 0, month: "2025-07-01", day_type: "workday", local_hour: 8, trips: 700, member_trips: 600, casual_trips: 100}
+          - {trips_loaded: true, service_closed: false, precipitation_mm: 2.0, snowfall_cm: 0, month: "2025-07-01", day_type: "workday", local_hour: 8, trips: 700, member_trips: 600, casual_trips: 100}
       - input: ref('fct_city_day')
         rows: []
       - input: ref('mart_baselines')
@@ -85,7 +85,7 @@ unit_tests:
       - input: ref('fct_city_day')
         rows:
           # a windy dry holiday: compared with calm dry weekend days of the same month
-          - {trips_loaded: true, is_dry: true, snowfall_cm: 0, wind_gusts_max_kmh: 60, aqi_category: null, month: "2025-07-01", day_type: "holiday", trips: 80, member_trips: 50, casual_trips: 30}
+          - {trips_loaded: true, service_closed: false, is_dry: true, snowfall_cm: 0, wind_gusts_max_kmh: 60, aqi_category: null, month: "2025-07-01", day_type: "holiday", trips: 80, member_trips: 50, casual_trips: 30}
       - input: ref('mart_baselines')
         rows:
           - {reference: "calm dry day", month: "2025-07-01", day_type: "weekend", local_hour: null, rider: "all", expected_trips: 100}

@@ -102,6 +102,19 @@ def ingest_month(month: date, lake: Lake, http: Http, workdir: Path) -> dict[str
             "downloaded_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "members": members,
         }
+        if lake.exists(bronze):
+            previous = lake.read_json(bronze)
+            if (previous.get("etag"), previous.get("members")) != (
+                record["etag"],
+                record["members"],
+            ):
+                log.warning(
+                    "trips %s: the archive changed since %s (ETag %s → %s)",
+                    f"{month:%Y-%m}",
+                    previous.get("downloaded_at"),
+                    previous.get("etag"),
+                    record["etag"],
+                )
         lake.delete(manifest_rel)
         lake.write_json(bronze, record)
         lake.delete_dir(paths.silver_trips_dir(month))
