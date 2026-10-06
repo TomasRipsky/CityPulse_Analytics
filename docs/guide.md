@@ -19,6 +19,7 @@ but has not seen this project. The README says *what* and *how to run*; this fil
 10. [Modelling with dbt](#10-modelling-with-dbt)
 11. [How the weather effects are measured](#11-how-the-weather-effects-are-measured)
 12. [Orchestration with Airflow](#12-orchestration-with-airflow)
+13. [The showcase site](#13-the-showcase-site)
 
 ---
 
@@ -845,3 +846,26 @@ with `bq rm 'raw.trips$202607'`, and the lake still holds those periods, so relo
 >   and Airflow treats it as exclusive. It now sits a few hours later, with a test.
 > - **One backfill per DAG.** Airflow refuses a second backfill while one is running; a single
 >   missing run is triggered by hand with its logical date (`airflow dags trigger --logical-date`).
+
+---
+
+## 13. The showcase site
+
+The public face of the project is a small static site in `site/`, built with
+[Observable Framework](https://observablehq.com/framework/) and published on GitHub Pages
+(https://tomasripsky.github.io/CityPulse_Analytics/). Four pages, each opening with the question it
+answers, a "What am I looking at?" box and a note on its limits: the year's pulse and the answers;
+what the weather does; when New York rides; how it is built.
+
+**Data in, no cloud at build time.** `make site-data ENV=prod` runs `citypulse site-export`, which
+queries the marts once and writes seven small files (64 KB) into `site/src/data/`: daily facts,
+the hourly profile, the effects, the temperature curve and response, the months, a summary. They
+are committed. The dataset is frozen, so the site can be built anywhere — CI builds it on every
+pull request, and `citypulse-site` publishes it when a release reaches `main` — without credentials.
+Only aggregates leave the warehouse: Citi Bike's licence allows analyses, not republishing trips.
+Dates are written as text and there are no timestamps, so the browser reads every value as is.
+
+**Charts** follow the lab's dataviz rules: a validated palette in light and dark (blue for members
+and trips, orange for casual riders and warmth), thin marks, a legend whenever there are two series,
+a tooltip on every mark, no dual axes. Effects are dot plots — one row per band, one dot per kind of
+rider — so the gap between commuters and casual riders is the first thing you see.
