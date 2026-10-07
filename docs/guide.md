@@ -851,11 +851,22 @@ with `bq rm 'raw.trips$202607'`, and the lake still holds those periods, so relo
 
 ## 13. The showcase site
 
-The public face of the project is a small static site in `site/`, built with
+The public face of the project is a static site in `site/`, built with
 [Observable Framework](https://observablehq.com/framework/) and published on GitHub Pages
-(https://tomasripsky.github.io/CityPulse_Analytics/). Four pages, each opening with the question it
-answers, a "What am I looking at?" box and a note on its limits: the year's pulse and the answers;
-what the weather does; when New York rides; how it is built.
+(https://tomasripsky.github.io/CityPulse_Analytics/). It is one long page that tells the story in
+order: the answer, rain by the hour, snow, wind and air, warmth, the year day by day, a case file on
+the blizzard closure, the pipeline, the decisions, quality, limits and how to run it.
+
+**A personality from the domain.** New York at night: an asphalt background, a skyline with lit
+windows and the Empire State, Chrysler and One World Trade silhouettes (`components/street.js`,
+seeded so it is the same on every visit), rain falling over it, a bike riding a green bike lane, the
+answers as street signs, section markers as subway bullets and the pipeline drawn as a subway map.
+Every illustration is our own SVG or CSS — no logos, photos or fonts fetched from third parties.
+Framework's sidebar, pager and page column are switched off in the config; `style.css` opens the
+frame to full-bleed sections. Two things to know when styling Framework: its own `.card` and
+`.note` classes carry styles (the page uses `.box` and `.footnote`), and its `a[href]` rule outranks a
+plain class, so the buttons are `a.btn`. Links are written out in full, because Framework checks
+links at build time and cannot see through `${…}` in an `href`.
 
 **Data in, no cloud at build time.** `make site-data ENV=prod` runs `citypulse site-export`, which
 queries the marts once and writes seven small files (64 KB) into `site/src/data/`: daily facts,
@@ -865,7 +876,11 @@ pull request, and `citypulse-site` publishes it when a release reaches `main` �
 Only aggregates leave the warehouse: Citi Bike's licence allows analyses, not republishing trips.
 Dates are written as text and there are no timestamps, so the browser reads every value as is.
 
-**Charts** follow the lab's dataviz rules: a validated palette in light and dark (blue for members
-and trips, orange for casual riders and warmth), thin marks, a legend whenever there are two series,
-a tooltip on every mark, no dual axes. Effects are dot plots — one row per band, one dot per kind of
-rider — so the gap between commuters and casual riders is the first thing you see.
+**Charts** follow the lab's dataviz rules: blue for members and trips, orange for casual riders —
+the validated pair, re-checked against the asphalt surface (colour-blind separation ΔE 26.8). Taxi
+yellow is chrome only (headline, buttons, annotations): the validator rejects it as a data colour on
+a dark surface because it is far lighter than the other series. Thin marks, a legend whenever there
+are two series plus a direct label, a tooltip on every mark, no dual axes. Effects are dot plots —
+one row per band, one dot per kind of rider — so the gap between commuters and casual riders is the
+first thing you see; on narrow screens the band name and its value move onto one line above the
+dots. Every chart is drawn through `resize()`, so it fits its panel from a phone to a wide screen.

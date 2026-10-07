@@ -3,6 +3,14 @@
 All notable changes to CityPulse. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [2.0.1] - 2026-10-07
+
+### Changed
+- **The showcase site is one page with a New York personality**: a night skyline, rain and a bike
+  on a green lane, the answers as street signs, the pipeline as a subway map and a case file on the
+  23 February 2026 blizzard closure. Same data, same build and deploy
+  ([site](https://tomasripsky.github.io/CityPulse_Analytics/)).
+
 ## [2.0.0] - 2026-10-06
 
 A rebuild of the whole pipeline with tests, correct data and an answer to the project's question.
