@@ -149,7 +149,7 @@ function stormChart(width) {
 }
 ```
 
-<header class="top" id="top">
+<header class="top">
   <a class="brand" href="#top" aria-label="CityPulse, back to the top">
     <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="5.5"/><circle cx="24" cy="21" r="5.5"/><path d="M8 21l5-9h8l3 9M13 12l-1.6-3H9.5M21 12l1-3h2.5M16 21l-3-9"/></g></svg>
     CityPulse
@@ -168,7 +168,7 @@ function stormChart(width) {
   </nav>
 </header>
 
-<section class="hero">
+<section class="hero" id="top">
   ${particles(70, "rain", 11, [0.6, 1.4])}
   <div class="hero-copy">
     <p class="eyebrow">New York City · Citi Bike · May 2025 – April 2026</p>
