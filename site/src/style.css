@@ -32,7 +32,8 @@
 }
 
 /* Framework's frame, opened up: no sidebar, no column, full-bleed sections. */
-html { scroll-behavior: smooth; scroll-padding-top: 4.2rem; }
+/* :root, not html: Framework sets scroll-padding-top on :root, which would win over html */
+:root { scroll-behavior: smooth; scroll-padding-top: 4.2rem; }
 body { max-width: none; background: var(--asphalt); color: var(--ink); font: 16px/1.65 var(--sans); }
 #observablehq-center { margin: 0; }
 #observablehq-main { margin: 0; min-height: 0; }
@@ -92,9 +93,13 @@ p { margin: 0 0 1em; }
 .hero h1 { font-size: clamp(2.2rem, 5.6vw, 4rem); max-width: 17ch; margin-bottom: .5em; line-height: 1.04; }
 .hero h1 em { font-style: normal; color: var(--taxi); }
 .lede { font-size: 1.15rem; color: #c9d3e1; max-width: 58ch; }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12.5rem), 1fr)); gap: 1.2rem 1.6rem; margin: 2rem 0 1rem; max-width: 980px; }
+/* a ten-character number in a monospace face at 2.1rem needs ~14rem with its border: four columns
+   only when four of those fit, else two, else one — never a lone orphan on a second row */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.2rem 1.6rem; margin: 2rem 0 1rem; }
+@media (max-width: 1080px) { .stats { grid-template-columns: repeat(2, minmax(0, 15rem)); } }
+@media (max-width: 560px) { .stats { grid-template-columns: 1fr; } }
 .stat { border-left: 3px solid var(--taxi); padding: .1rem .5rem .1rem .9rem; min-width: 0; }
-.stat b { display: block; font: 650 clamp(1.5rem, 2.6vw, 2.1rem)/1.1 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.stat b { display: block; font: 650 clamp(1.5rem, 2.6vw, 2.1rem)/1.1 var(--mono); color: var(--ink); white-space: nowrap; }
 .stat span { font-size: .8rem; color: var(--mist); letter-spacing: .03em; }
 
 .skyline { position: relative; z-index: 1; display: block; width: 100%; height: auto; margin-top: 1.5rem; color: #1a2438; }
@@ -187,7 +192,7 @@ a.btn.ghost { background: transparent; color: var(--taxi); border: 1px solid var
 .foot .wrap { padding: 1.6rem 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem; }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
+  :root { scroll-behavior: auto; }
   .rain i, .snowfall i, .street .rider, .street .rider .wheel { animation: none; }
   .street .rider { left: 12%; }
 }
