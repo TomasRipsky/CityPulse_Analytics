@@ -32,7 +32,8 @@
 }
 
 /* Framework's frame, opened up: no sidebar, no column, full-bleed sections. */
-html { scroll-behavior: smooth; scroll-padding-top: 4.2rem; }
+/* :root, not html: Framework sets scroll-padding-top on :root, which would win over html */
+:root { scroll-behavior: smooth; scroll-padding-top: 4.2rem; }
 body { max-width: none; background: var(--asphalt); color: var(--ink); font: 16px/1.65 var(--sans); }
 #observablehq-center { margin: 0; }
 #observablehq-main { margin: 0; min-height: 0; }
@@ -187,7 +188,7 @@ a.btn.ghost { background: transparent; color: var(--taxi); border: 1px solid var
 .foot .wrap { padding: 1.6rem 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem; }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
+  :root { scroll-behavior: auto; }
   .rain i, .snowfall i, .street .rider, .street .rider .wheel { animation: none; }
   .street .rider { left: 12%; }
 }

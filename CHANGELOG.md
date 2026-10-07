@@ -3,6 +3,12 @@
 All notable changes to CityPulse. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [2.0.2] - 2026-10-07
+
+### Fixed
+- **The site's logo scrolls back to the top**, and the section links no longer leave a heading
+  under the sticky header (Framework's own `scroll-padding-top` was overriding ours).
+
 ## [2.0.1] - 2026-10-07
 
 ### Changed
