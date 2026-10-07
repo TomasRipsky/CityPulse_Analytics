@@ -8,6 +8,7 @@ versions follow [SemVer](https://semver.org/).
 ### Fixed
 - **The site's logo scrolls back to the top**, and the section links no longer leave a heading
   under the sticky header (Framework's own `scroll-padding-top` was overriding ours).
+- **The hero's trip count no longer wraps** onto two lines on mid-width screens.
 
 ## [2.0.1] - 2026-10-07
 
