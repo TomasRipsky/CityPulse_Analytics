@@ -195,7 +195,7 @@ function stormChart(width) {
   <p class="sub">Each number compares like with like: an hour of rain against <b>the same hour, on the same kind of day, in the same month, when it was dry</b> — so neither the season nor the rush hour can pass for weather.</p>
   <div class="signs">
     <div class="sign"><span class="plate">Drizzle St</span><b>${fmt.signedPct(drizzle.all.effect_pct)}</b><p>trips in an hour of drizzle (under 1 mm). A quarter of the riders stay off the bike.</p>${split(drizzle)}</div>
-    <div class="sign"><span class="plate">Rain Ave</span><b>${fmt.signedPct(rain.all.effect_pct)}</b><p>trips in an hour of steady rain (1–4 mm). Half the city takes the subway instead.</p>${split(rain)}</div>
+    <div class="sign"><span class="plate">Rain Ave</span><b>${fmt.signedPct(rain.all.effect_pct)}</b><p>trips in an hour of steady rain (1–4 mm). Nearly half the riders stay off the bike.</p>${split(rain)}</div>
     <div class="sign"><span class="plate">Snow Blvd</span><b>${fmt.signedPct(snow.all.effect_pct)}</b><p>trips on a day with 5 cm of snow or more (${snow.all.periods} days) — the strongest effect of all.</p>${split(snow)}</div>
     <div class="sign"><span class="plate">Warmth Dr</span><b>+${warmth.all.pct_per_degree.toFixed(1)}%<small> /°C</small></b><p>trips for every degree a dry day feels warmer than usual for its month.</p><div class="split"><span class="swatch member"></span>members +${warmth.member.pct_per_degree.toFixed(1)}% · <span class="swatch casual"></span>casual +${warmth.casual.pct_per_degree.toFixed(1)}%</div></div>
     <div class="sign"><span class="plate">Gust Way</span><b>${fmt.signedPct(wind.all.effect_pct)}</b><p>on a dry day with gusts of 55–70 km/h (${wind.all.periods} days). Wind barely matters.</p>${split(wind)}</div>
@@ -216,12 +216,12 @@ function stormChart(width) {
     <h3>Rain <small>trips vs the same hour when dry</small></h3>
     ${resize((width) => effectChart("rain", width))}
   </div>
-  <p class="footnote">A drizzle is already enough to lose a quarter of the riders; steady rain halves them. Casual riders react more than members, who still have to get to work. Heavy rain looks milder, but only ${effect(effects, "rain", "heavy rain (≥ 4 mm/h)").periods} hours fell in that band — downpours are short and people are already out.</p>
+  <p class="footnote">A drizzle is already enough to lose a quarter of the riders; steady rain halves them. Casual riders react more than members, who still have to get to work. Heavy rain looks milder, but only ${effect(effects, "rain", "heavy rain (≥ 4 mm/h)").periods} hours fell in that band, and a short downpour may catch riders already out.</p>
   <div class="panel mt">
     <h3>The rush hour, washed out <small>average trips per hour, dry vs wet</small></h3>
     ${resize((width) => rush(width))}
   </div>
-  <p class="footnote">On workdays the 8 a.m. and 5–6 p.m. peaks are commuters; rain cuts both by roughly half. Plain averages of every wet and dry hour (snow and the blizzard closure left out; wet hours shown where there are at least five), not matched by month like the dots above.</p>
+  <p class="footnote">On workdays the 8 a.m. and 5–6 p.m. peaks are commuters; rain cuts both by 40–50%. Plain averages of every wet and dry hour (snow and the blizzard closure left out; wet hours shown where there are at least five), not matched by month like the dots above.</p>
 </section>
 
 <section id="weather" class="band">
