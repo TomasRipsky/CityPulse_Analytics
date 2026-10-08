@@ -19,7 +19,7 @@ but has not seen this project. The README says *what* and *how to run*; this fil
 10. [Modelling with dbt](#10-modelling-with-dbt)
 11. [How the weather effects are measured](#11-how-the-weather-effects-are-measured)
 12. [Orchestration with Airflow](#12-orchestration-with-airflow)
-13. [The showcase site](#13-the-showcase-site)
+13. [The showcase site](#13-the-showcase-site) — the story page and the BI page
 
 ---
 
@@ -902,3 +902,41 @@ are two series plus a direct label, a tooltip on every mark, no dual axes. Effec
 one row per band, one dot per kind of rider — so the gap between commuters and casual riders is the
 first thing you see; on narrow screens the band name and its value move onto one line above the
 dots. Every chart is drawn through `resize()`, so it fits its panel from a phone to a wide screen.
+
+### The BI page
+
+`/bi` is the same site in tool mode, for a business reader: filters (months, kind of day, rider,
+bike), KPIs with the change against the previous period of the same length, demand (daily series,
+weekday × hour heatmap, months), weather (trips lost to rain by month, snow days, the effects
+table), stations (a map drawn by the stations themselves, a sortable table with a CSV download, a
+panel per station) and data quality (source → warehouse counts). It replaces the Looker Studio
+dashboard of version 1 ([decision 0018](decisions/0018-bi-page-instead-of-looker-studio.md)).
+
+**How it works without a server.** The page declares seven Parquet files in its front matter;
+Framework loads them into **DuckDB-WASM**, a full SQL engine running in the browser, and every
+`sql` block on the page is a query that interpolates the filter values (`${rider}`, `${from}`…) as
+parameters. Change a filter and every query that uses it runs again, in milliseconds, on about 1 MB
+of data. Nothing is queried in BigQuery when someone visits.
+
+**Where the files come from.** `make site-data` exports the dbt report models (`rpt_*`, chapter 10)
+as zstd Parquet into `site/src/data/bi/`. Each is shaped for one part of the page and states its
+grain; reconciliation tests check that the daily base, the heatmap and the station months add up
+to `fct_city_day`. They all read one intermediate table, `int_trip_hour_counts`, so the 44 million
+trips are scanned once per build, not once per report.
+
+**Numbers worth knowing how they are made.**
+- *Trips lost to rain* = expected − actual over rain hours, from the same comparison as the effects
+  (`fct_condition_periods`); rain and snow overlap, so they are never added together.
+- *A station's rain effect* compares its rain hours with its own dry hours of the same month, kind
+  of day and hour, over the months it was active; it is shown only where at least 1,000 trips were
+  expected in the rain (1,320 of 2,369 stations), with its counting noise.
+- Trips that do not start at a New York station (e-bikes left outside a dock, and 26 trips from
+  "LA Metro Demo" stations in Los Angeles that Citi Bike's files contain) count in the totals but
+  are not on the map.
+- Deltas compare with the previous period of equal length; the whole year has none.
+
+> **Problems we hit.** A class name collision: the KPI tile for rain used the class `rain`, which
+> the story page uses for its full-screen falling-rain layer (`position: absolute; inset: 0`) — the
+> tile stretched over the whole page and hid everything below it. Framework also wraps every
+> `${…}` in an element of its own, so a CSS grid around `${tiles}` saw one child: the grid has to be
+> inside the generated HTML.

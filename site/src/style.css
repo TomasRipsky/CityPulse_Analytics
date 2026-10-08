@@ -78,7 +78,8 @@ p { margin: 0 0 1em; }
 .top nav a { color: var(--mist); }
 .top nav a:hover { color: var(--ink); text-decoration: none; }
 .top nav .gh { color: #111; background: var(--taxi); padding: .3rem .85rem; border-radius: 999px; font-weight: 700; }
-@media (max-width: 900px) { .top nav a:not(.gh) { display: none; } }
+@media (max-width: 900px) { .top nav a:not(.gh):not(.bi-link) { display: none; } }
+.top nav .bi-link { color: var(--ink); font-weight: 700; }
 
 /* hero: a night street — skyline, rain, a bike on a green lane ------------- */
 .hero {
@@ -197,3 +198,43 @@ a.btn.ghost { background: transparent; color: var(--taxi); border: 1px solid var
   .street .rider { left: 12%; }
 }
 .muted { color: var(--mist); }
+
+/* BI page --------------------------------------------------------------- */
+.badge { font: 700 .7rem var(--mono); letter-spacing: .08em; color: #111; background: var(--taxi); border-radius: 4px; padding: .1rem .35rem; }
+.filters {
+  position: sticky; top: 3.4rem; z-index: 15;
+  display: flex; flex-wrap: wrap; gap: .4rem 1.6rem; align-items: center;
+  padding: .55rem 1.25rem; background: rgba(17, 23, 34, .94); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--curb); font-size: .85rem;
+}
+.filters form { margin: 0; width: auto; max-width: none; }
+.filters form > label { width: auto; margin-right: .5rem; color: var(--mist); }
+.filters form select { max-width: 9rem; }
+.bi-head { padding-top: 2.5rem; padding-bottom: 2.5rem; }
+.bi-head h1 { font-size: clamp(1.7rem, 4vw, 2.6rem); margin-bottom: .4em; }
+.bi-head h1 em { font-style: normal; color: var(--taxi); }
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .kpis { grid-template-columns: 1fr; } }
+.kpi { background: var(--block); border: 1px solid var(--curb); border-left: 3px solid var(--series-1); border-radius: 12px; padding: .9rem 1.1rem; min-width: 0; }
+.kpi.wet { border-left-color: var(--rain); }
+.kpi span { display: block; font-size: .8rem; color: var(--mist); letter-spacing: .03em; }
+.kpi b { display: block; font: 700 clamp(1.4rem, 2.6vw, 1.9rem)/1.2 var(--mono); white-space: nowrap; }
+.kpi .delta { display: block; margin-top: .2rem; font: .76rem var(--mono); color: var(--mist); }
+.map-head { margin-bottom: .8rem; }
+.map-head form { width: auto; max-width: none; }
+.table-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .6rem; }
+.btn.small, a.btn.small, button.btn { font: 700 .82rem var(--sans); padding: .4rem .9rem; cursor: pointer; }
+button.btn.ghost { background: transparent; color: var(--taxi); border: 1px solid var(--taxi); border-radius: 999px; }
+.station-panel .eyebrow { margin-bottom: .3rem; }
+.station-name { font-size: 1.3rem; margin-bottom: .8rem; }
+.tiles.mini { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; margin-bottom: .6rem; }
+.tiles.mini .tile { padding: .6rem .3rem; }
+.tiles.mini .tile b { font-size: 1.15rem; }
+.mini-title { margin: .9rem 0 .2rem; font-size: .85rem; color: var(--mist); }
+/* phones: the filter bar would cover a third of the screen if it stayed pinned */
+@media (max-width: 700px) {
+  .filters { position: static; gap: 0 1rem; padding: .4rem 1rem; }
+  .filters form { flex-wrap: nowrap; }
+  .filters form > label { padding-top: .1rem; }
+}
