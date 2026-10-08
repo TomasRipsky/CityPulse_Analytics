@@ -1,5 +1,5 @@
 -- grain: one row per month (first day of the month, New York calendar).
--- A summary for dashboards: totals and averages only, no derived ratios between units.
+-- A monthly summary: totals and averages only, no derived ratios between units.
 with days as (select * from {{ ref('fct_city_day') }})
 
 select

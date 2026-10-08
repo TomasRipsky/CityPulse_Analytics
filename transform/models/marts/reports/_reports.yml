@@ -1,0 +1,143 @@
+version: 2
+
+# Report models: shaped for the site's BI page (exported as Parquet by `citypulse site-export`).
+# Plausible trips only (1 min – 3 h); holidays count as weekends.
+models:
+  - name: rpt_day_riders
+    description: "Trips and minutes ridden per day, rider and bike type. Grain: local_date × rider × bike_type."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["local_date", "rider", "bike_type"]
+    columns:
+      - name: rider
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: ["member", "casual"]}
+      - name: bike_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments: {values: ["classic", "electric"]}
+
+  - name: rpt_week_hours
+    description: >
+      Trips per weekday, kind of day and New York hour, summed over each month, with the number of
+      those days that had the hour (for averages). Grain: month × weekday × day_type × local_hour ×
+      rider.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["month", "weekday_number", "day_type", "local_hour", "rider"]
+
+  - name: rpt_stations
+    description: >
+      One row per New York start station: name, position (median of trip starts), the year's trips
+      and shares, active months, and its own rain effect where at least 1,000 trips were expected
+      in rain hours. Grain: station_id.
+    columns:
+      - name: station_id
+        data_tests: [unique, not_null]
+      - name: lat
+        data_tests:
+          - in_range:
+              arguments: {min_value: 40.4, max_value: 41.0}
+      - name: lng
+        data_tests:
+          - in_range:
+              arguments: {min_value: -74.3, max_value: -73.6}
+      - name: member_share_pct
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 100}
+      - name: electric_share_pct
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 100}
+
+  - name: rpt_station_months
+    description: "Trips per start station, month, kind of day and rider. Grain: station_id × month × day_type × rider."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["station_id", "month", "day_type", "rider"]
+
+  - name: rpt_station_hours
+    description: "A station's trips by New York hour over the year. Grain: station_id × day_type × local_hour."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["station_id", "day_type", "local_hour"]
+
+  - name: rpt_weather_losses
+    description: >
+      Trips lost (expected − actual) per month for rain (hourly) and snow (daily), per band and
+      rider (member, casual). Rain and snow overlap: never add their losses together. Grain: month
+      × condition × band × rider.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["month", "condition", "band", "rider"]
+
+  - name: rpt_load_audit
+    description: "Rows counted at the source vs rows loaded, per source and month (latest load of each period). Grain: source × month."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["source", "month"]
+
+unit_tests:
+  - name: station_rain_effect_counts_empty_rain_hours_in_active_months_only
+    model: rpt_stations
+    given:
+      - input: ref('int_trip_hour_counts')
+        rows:
+          # A: 2 trips in each of three dry 8 a.m. hours, none in the rainy one (no row at all)
+          - {station_id: "A", local_date: "2025-01-06", hour_start: "2025-01-06 13:00:00", rider: "member", bike_type: "classic", trips: 2}
+          - {station_id: "A", local_date: "2025-01-07", hour_start: "2025-01-07 13:00:00", rider: "member", bike_type: "classic", trips: 2}
+          - {station_id: "A", local_date: "2025-01-08", hour_start: "2025-01-08 13:00:00", rider: "member", bike_type: "classic", trips: 2}
+          # B: active in February only — January's rain must not be counted for it
+          - {station_id: "B", local_date: "2025-02-03", hour_start: "2025-02-03 13:00:00", rider: "casual", bike_type: "electric", trips: 5}
+          # C: busy enough for an effect: 1,200 per dry hour, 600 in the rain
+          - {station_id: "C", local_date: "2025-01-06", hour_start: "2025-01-06 13:00:00", rider: "member", bike_type: "electric", trips: 1200}
+          - {station_id: "C", local_date: "2025-01-07", hour_start: "2025-01-07 13:00:00", rider: "member", bike_type: "electric", trips: 1200}
+          - {station_id: "C", local_date: "2025-01-08", hour_start: "2025-01-08 13:00:00", rider: "member", bike_type: "electric", trips: 1200}
+          - {station_id: "C", local_date: "2025-01-09", hour_start: "2025-01-09 13:00:00", rider: "member", bike_type: "electric", trips: 600}
+      - input: ref('fct_city_day')
+        rows:
+          - {local_date: "2025-01-06", month: "2025-01-01", day_type: "workday", trips_loaded: true}
+          - {local_date: "2025-01-07", month: "2025-01-01", day_type: "workday", trips_loaded: true}
+          - {local_date: "2025-01-08", month: "2025-01-01", day_type: "workday", trips_loaded: true}
+          - {local_date: "2025-01-09", month: "2025-01-01", day_type: "workday", trips_loaded: true}
+          - {local_date: "2025-02-03", month: "2025-02-01", day_type: "workday", trips_loaded: true}
+      - input: ref('fct_city_hour')
+        rows:
+          - {hour_start: "2025-01-06 13:00:00", month: "2025-01-01", day_type: "workday", local_hour: 8, trips_loaded: true, service_closed: false, precipitation_mm: 0, snowfall_cm: 0}
+          - {hour_start: "2025-01-07 13:00:00", month: "2025-01-01", day_type: "workday", local_hour: 8, trips_loaded: true, service_closed: false, precipitation_mm: 0, snowfall_cm: 0}
+          - {hour_start: "2025-01-08 13:00:00", month: "2025-01-01", day_type: "workday", local_hour: 8, trips_loaded: true, service_closed: false, precipitation_mm: 0, snowfall_cm: 0}
+          - {hour_start: "2025-01-09 13:00:00", month: "2025-01-01", day_type: "workday", local_hour: 8, trips_loaded: true, service_closed: false, precipitation_mm: 2.0, snowfall_cm: 0}
+          - {hour_start: "2025-02-03 13:00:00", month: "2025-02-01", day_type: "workday", local_hour: 8, trips_loaded: true, service_closed: false, precipitation_mm: 0, snowfall_cm: 0}
+      - input: ref('stg_trips')
+        rows:
+          - {is_plausible: true, start_station_id: "A", start_station_name: "A St", start_lat: 40.7, start_lng: -74.0}
+          - {is_plausible: true, start_station_id: "B", start_station_name: "B St", start_lat: 40.7, start_lng: -74.0}
+          - {is_plausible: true, start_station_id: "C", start_station_name: "C St", start_lat: 40.7, start_lng: -74.0}
+    expect:
+      rows:
+        - {station_id: "A", trips: 6, active_months: 1, rain_hours: 1, rain_trips: 0, rain_expected_trips: 2, rain_effect_pct: null}
+        - {station_id: "B", trips: 5, active_months: 1, rain_hours: null, rain_trips: null, rain_expected_trips: null, rain_effect_pct: null}
+        - {station_id: "C", trips: 4200, active_months: 1, rain_hours: 1, rain_trips: 600, rain_expected_trips: 1200, rain_effect_pct: -50.0}
+
+  - name: losses_are_rain_and_snow_per_rider_without_reference_bands
+    model: rpt_weather_losses
+    given:
+      - input: ref('fct_condition_periods')
+        rows:
+          - {condition: "rain", band: "dry (reference)", band_order: 0, is_reference: true, month: "2025-07-01", rider: "member", trips: 100, expected_trips: 90}
+          - {condition: "rain", band: "rain (1–4 mm/h)", band_order: 2, is_reference: false, month: "2025-07-01", rider: "all", trips: 70, expected_trips: 100}
+          - {condition: "rain", band: "rain (1–4 mm/h)", band_order: 2, is_reference: false, month: "2025-07-01", rider: "member", trips: 60, expected_trips: 80}
+          - {condition: "wind", band: "windy (55–70 km/h)", band_order: 2, is_reference: false, month: "2025-07-01", rider: "member", trips: 50, expected_trips: 60}
+    expect:
+      rows:
+        - {month: "2025-07-01", condition: "rain", band: "rain (1–4 mm/h)", rider: "member", periods: 1, trips: 60, expected_trips: 80, trips_lost: 20}

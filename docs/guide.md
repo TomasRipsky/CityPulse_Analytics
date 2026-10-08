@@ -378,7 +378,7 @@ console, so the whole environment can be destroyed and rebuilt.
 | Project | Holds | Used by |
 |---|---|---|
 | `citypulse-tr-dev` | a sample: weather and air quality for January and July 2025 and both daylight-saving weekends; trips for January 2025 | CI, which builds every pull request's dbt models here |
-| `citypulse-tr-prod` | the frozen dataset: one year, May 2025 – April 2026 | the backfill, the site export, the dashboard |
+| `citypulse-tr-prod` | the frozen dataset: one year, May 2025 – April 2026 | the backfill, the site export (story and BI pages) |
 
 A GCP *project* is the unit of billing and permissions. Separate projects mean code under review
 can never read or overwrite the real data, and a mistake in dev cannot cost money in prod.
@@ -563,6 +563,7 @@ flowchart LR
     fd[fct_city_day]
     m[mart_city_month]
     base[mart_baselines]
+    cp[fct_condition_periods]
     ce[mart_condition_effects]
     tc[mart_temperature_curve]
     tr[mart_temperature_response]
@@ -574,16 +575,27 @@ flowchart LR
   iwh & ith & cal & sa --> fh
   cal & iwd & iad & itd --> fd
   fd --> m
-  fh & fd --> base --> ce
-  fh & fd --> ce
+  fh & fd --> base --> cp --> ce
+  fh & fd --> cp
   fd --> tc & tr
+  subgraph rpt["reports (tables, for the BI page)"]
+    r1[rpt_day_riders · rpt_week_hours]
+    r2[rpt_stations · rpt_station_months · rpt_station_hours]
+    r3[rpt_weather_losses]
+    r4[rpt_load_audit]
+  end
+  st --> ihc[int_trip_hour_counts] --> r1 & r2
+  fd & fh --> r1 & r2
+  cp --> r3
+  la --> r4
 ```
 
 | Layer | Materialised as | Job |
 |---|---|---|
 | staging | views (free to keep, always current) — except `stg_trips`, a table (see "What a build costs") | rename columns to say their unit, convert time, de-duplicate trips |
 | intermediate | views, except the two trip aggregates (tables) | one grain per model: weather per hour and per day, air per day, trips per hour and per day, calendar |
-| marts | tables (fast for dashboards) | the facts people query, the baselines and the answers |
+| marts | tables (fast to query) | the facts people query, the baselines and the answers |
+| marts, `rpt_*` | tables | shaped for the site's BI page and exported as Parquet (chapter 13) |
 
 Every model starts with a comment that states its **grain** — what one row is. "One row per New
 York day" is a promise the `unique` test on its key then checks.
@@ -709,6 +721,12 @@ The reference band is listed too, with an effect of ~0 by construction — a bui
 
 Each effect is given for all riders, **members** (annual subscribers, mostly commuting) and
 **casual** riders (single rides and day passes) separately, with the number of periods behind it.
+
+The comparison of each period is a table of its own, `fct_condition_periods` (one row per
+condition, period and rider, with its actual and expected trips). `mart_condition_effects` sums it
+by band; `rpt_weather_losses` sums it by month into **trips lost** (expected − actual) for the BI
+page. Conditions overlap — an hour of a snowy day can also be an hour of rain — so losses are
+never added up across conditions.
 
 ### Temperature
 

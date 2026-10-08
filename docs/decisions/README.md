@@ -23,3 +23,4 @@ old one. 0001–0007 were written retroactively and describe the March 2026 buil
 | [0015](0015-expected-vs-actual-effects.md) | Weather effects as expected vs actual trips | Accepted |
 | [0016](0016-trip-archives-stay-at-the-source.md) | Trip archives stay at the source; Bronze keeps their record | Accepted |
 | [0017](0017-airflow-3-from-a-versioned-image.md) | Airflow 3 locally, from a versioned image | Accepted |
+| [0018](0018-bi-page-instead-of-looker-studio.md) | A BI page in the site instead of Looker Studio | Accepted |
