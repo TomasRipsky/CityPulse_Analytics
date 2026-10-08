@@ -164,6 +164,7 @@ function stormChart(width) {
     <a href="#pipeline">Pipeline</a>
     <a href="#decisions">Decisions</a>
     <a href="#quality">Quality</a>
+    <a class="bi-link" href="./bi">BI <span class="badge">new</span></a>
     <a class="gh" href="https://github.com/TomasRipsky/CityPulse_Analytics">GitHub ↗</a>
   </nav>
 </header>
@@ -205,6 +206,7 @@ function stormChart(width) {
     <h3>The city's pulse <small>trips per day, May 2025 – April 2026</small></h3>
     ${resize((width) => pulse(width))}
   </div>
+  <p class="footnote"><b>Want your own cut?</b> <a href="./bi">The BI page</a> filters every number by month, kind of day, rider and bike, down to a single station.</p>
   <p class="footnote">Careful associations, not proof of cause: a rainy hour is also darker and often colder. Trips under a minute or over three hours are left out; members are annual subscribers, casual riders buy single rides or day passes.</p>
 </div>
 </section>
@@ -384,7 +386,8 @@ make apply ENV=dev && make airflow-up ENV=dev
 make transform ENV=dev                              <span class="c"># dbt build: models + every test</span>
 make destroy ENV=dev                                <span class="c"># tear it all down</span></pre>
   <p>About <b>€0 a month</b>: free tiers, no always-on compute, budget alerts and daily query quotas as a hard stop.</p>
-  <a class="btn" href="https://github.com/TomasRipsky/CityPulse_Analytics">The repository</a>
+  <a class="btn" href="./bi">Explore the BI page</a>
+  <a class="btn ghost" href="https://github.com/TomasRipsky/CityPulse_Analytics">The repository</a>
   <a class="btn ghost" href="https://github.com/TomasRipsky/CityPulse_Analytics/blob/main/docs/guide.md">The guide</a>
   <a class="btn ghost" href="https://github.com/TomasRipsky/CityPulse_Analytics/tree/main/docs/decisions">The decisions</a>
 </div>
