@@ -1,36 +1,33 @@
--- grain: one row per (month, weekday, local_hour, rider).
--- The weekday × hour heatmap: trips summed over the month's days of that weekday, and how many
--- such days there were, so the page shows trips per hour as a true average for any month range.
--- New York hours: on the fall-back day the repeated 01:00 hour adds to 01:00.
+-- grain: one row per (month, weekday, day_type, local_hour, rider).
+-- The weekday × hour heatmap: trips summed over the month's days of that weekday and kind
+-- (holidays are weekends, so a holiday Monday does not dilute workday Mondays), and how many of
+-- those days had that hour — so the page averages correctly for any month range, including the
+-- spring-forward Sunday with no 02:00 (the fall-back day's two 01:00 hours add to one).
 with hours as (
-    select local_date, local_hour, member_trips, casual_trips
-    from {{ ref('fct_city_hour') }}
-    where trips_loaded
+    select h.local_date, h.local_hour, h.member_trips, h.casual_trips, d.month, d.weekday,
+        extract(dayofweek from h.local_date) as weekday_number,
+        if(d.day_type = 'workday', 'workday', 'weekend') as day_type
+    from {{ ref('fct_city_hour') }} h
+    join {{ ref('fct_city_day') }} d using (local_date)
+    where d.trips_loaded
 ),
-days as (
-    select local_date, month, weekday, extract(dayofweek from local_date) as weekday_number
-    from {{ ref('fct_city_day') }}
-    where trips_loaded
-),
-day_counts as (
-    select month, weekday_number, count(*) as days from days group by 1, 2
-),
+
 long as (
-    select d.month, d.weekday, d.weekday_number, h.local_hour, 'member' as rider, h.member_trips as trips
-    from hours h join days d using (local_date)
+    select month, weekday, weekday_number, day_type, local_hour, local_date, 'member' as rider, member_trips as trips
+    from hours
     union all
-    select d.month, d.weekday, d.weekday_number, h.local_hour, 'casual', h.casual_trips
-    from hours h join days d using (local_date)
+    select month, weekday, weekday_number, day_type, local_hour, local_date, 'casual', casual_trips
+    from hours
 )
 
 select
-    l.month,
-    l.weekday,
-    l.weekday_number,
-    l.local_hour,
-    l.rider,
-    sum(l.trips) as trips,
-    any_value(c.days) as days
-from long l
-join day_counts c using (month, weekday_number)
-group by 1, 2, 3, 4, 5
+    month,
+    weekday,
+    weekday_number,
+    day_type,
+    local_hour,
+    rider,
+    sum(trips) as trips,
+    count(distinct local_date) as days
+from long
+group by 1, 2, 3, 4, 5, 6

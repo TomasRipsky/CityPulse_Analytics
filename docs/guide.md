@@ -584,7 +584,8 @@ flowchart LR
     r3[rpt_weather_losses]
     r4[rpt_load_audit]
   end
-  st & fd & fh --> r1 & r2
+  st --> ihc[int_trip_hour_counts] --> r1 & r2
+  fd & fh --> r1 & r2
   cp --> r3
   la --> r4
 ```

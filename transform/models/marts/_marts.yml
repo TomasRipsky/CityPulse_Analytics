@@ -73,7 +73,7 @@ unit_tests:
     given:
       - input: ref('fct_city_hour')
         rows:
-          - {trips_loaded: true, service_closed: false, precipitation_mm: 2.0, snowfall_cm: 0, month: "2025-07-01", day_type: "workday", local_hour: 8, trips: 700, member_trips: 600, casual_trips: 100}
+          - {trips_loaded: true, service_closed: false, precipitation_mm: 2.0, snowfall_cm: 0, local_date: "2025-07-08", hour_start: "2025-07-08 12:00:00", month: "2025-07-01", day_type: "workday", local_hour: 8, trips: 700, member_trips: 600, casual_trips: 100}
       - input: ref('fct_city_day')
         rows: []
       - input: ref('mart_baselines')
@@ -83,9 +83,9 @@ unit_tests:
           - {reference: "dry hour", month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "casual", expected_trips: 250}
     expect:
       rows:
-        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "all", trips: 700, expected_trips: 1000}
-        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "member", trips: 600, expected_trips: 750}
-        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "casual", trips: 100, expected_trips: 250}
+        - {condition: "rain", band: "rain (1–4 mm/h)", local_date: "2025-07-08", hour_start: "2025-07-08 12:00:00", rider: "all", trips: 700, expected_trips: 1000}
+        - {condition: "rain", band: "rain (1–4 mm/h)", local_date: "2025-07-08", hour_start: "2025-07-08 12:00:00", rider: "member", trips: 600, expected_trips: 750}
+        - {condition: "rain", band: "rain (1–4 mm/h)", local_date: "2025-07-08", hour_start: "2025-07-08 12:00:00", rider: "casual", trips: 100, expected_trips: 250}
 
   - name: daily_periods_compare_with_their_reference_band_and_holidays_count_as_weekends
     model: fct_condition_periods

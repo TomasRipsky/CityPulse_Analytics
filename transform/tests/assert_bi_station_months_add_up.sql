@@ -7,9 +7,10 @@ days as (
     select month, sum(trips) as trips from {{ ref('rpt_day_riders') }} group by 1
 ),
 unstationed as (
-    select date_trunc(start_date_local, month) as month, count(*) as trips
-    from {{ ref('stg_trips') }}
-    where is_plausible and not ({{ starts_at_nyc_station() }})
+    select d.month, sum(c.trips) as trips
+    from {{ ref('int_trip_hour_counts') }} c
+    join {{ ref('fct_city_day') }} d using (local_date)
+    where c.station_id is null and d.trips_loaded
     group by 1
 )
 

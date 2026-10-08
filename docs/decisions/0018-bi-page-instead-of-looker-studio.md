@@ -36,3 +36,8 @@ explains the main one.
 - No live data and no user accounts — acceptable for a frozen dataset; the page states its date.
 - Filters work at the grain of the exported files: some charts filter by month rather than by day,
   and say so.
+- The report models are the export contract: every column of an `rpt_*` model is published as is.
+  Adding a column to one is adding it to a public file — reviewed like any other public change.
+- One scan of the trips (`int_trip_hour_counts`, ~3.6 GB) feeds every station and rider report;
+  with the station names and positions (~2.1 GB) a full build reads about 20 GB, well inside the
+  50 GiB daily quota of prod.
