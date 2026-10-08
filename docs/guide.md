@@ -19,7 +19,7 @@ but has not seen this project. The README says *what* and *how to run*; this fil
 10. [Modelling with dbt](#10-modelling-with-dbt)
 11. [How the weather effects are measured](#11-how-the-weather-effects-are-measured)
 12. [Orchestration with Airflow](#12-orchestration-with-airflow)
-13. [The showcase site](#13-the-showcase-site)
+13. [The showcase site](#13-the-showcase-site) — the story page and the BI page
 
 ---
 
@@ -378,7 +378,7 @@ console, so the whole environment can be destroyed and rebuilt.
 | Project | Holds | Used by |
 |---|---|---|
 | `citypulse-tr-dev` | a sample: weather and air quality for January and July 2025 and both daylight-saving weekends; trips for January 2025 | CI, which builds every pull request's dbt models here |
-| `citypulse-tr-prod` | the frozen dataset: one year, May 2025 – April 2026 | the backfill, the site export, the dashboard |
+| `citypulse-tr-prod` | the frozen dataset: one year, May 2025 – April 2026 | the backfill, the site export (story and BI pages) |
 
 A GCP *project* is the unit of billing and permissions. Separate projects mean code under review
 can never read or overwrite the real data, and a mistake in dev cannot cost money in prod.
@@ -563,6 +563,7 @@ flowchart LR
     fd[fct_city_day]
     m[mart_city_month]
     base[mart_baselines]
+    cp[fct_condition_periods]
     ce[mart_condition_effects]
     tc[mart_temperature_curve]
     tr[mart_temperature_response]
@@ -574,16 +575,27 @@ flowchart LR
   iwh & ith & cal & sa --> fh
   cal & iwd & iad & itd --> fd
   fd --> m
-  fh & fd --> base --> ce
-  fh & fd --> ce
+  fh & fd --> base --> cp --> ce
+  fh & fd --> cp
   fd --> tc & tr
+  subgraph rpt["reports (tables, for the BI page)"]
+    r1[rpt_day_riders · rpt_week_hours]
+    r2[rpt_stations · rpt_station_months · rpt_station_hours]
+    r3[rpt_weather_losses]
+    r4[rpt_load_audit]
+  end
+  st --> ihc[int_trip_hour_counts] --> r1 & r2
+  fd & fh --> r1 & r2
+  cp --> r3
+  la --> r4
 ```
 
 | Layer | Materialised as | Job |
 |---|---|---|
 | staging | views (free to keep, always current) — except `stg_trips`, a table (see "What a build costs") | rename columns to say their unit, convert time, de-duplicate trips |
 | intermediate | views, except the two trip aggregates (tables) | one grain per model: weather per hour and per day, air per day, trips per hour and per day, calendar |
-| marts | tables (fast for dashboards) | the facts people query, the baselines and the answers |
+| marts | tables (fast to query) | the facts people query, the baselines and the answers |
+| marts, `rpt_*` | tables | shaped for the site's BI page and exported as Parquet (chapter 13) |
 
 Every model starts with a comment that states its **grain** — what one row is. "One row per New
 York day" is a promise the `unique` test on its key then checks.
@@ -709,6 +721,12 @@ The reference band is listed too, with an effect of ~0 by construction — a bui
 
 Each effect is given for all riders, **members** (annual subscribers, mostly commuting) and
 **casual** riders (single rides and day passes) separately, with the number of periods behind it.
+
+The comparison of each period is a table of its own, `fct_condition_periods` (one row per
+condition, period and rider, with its actual and expected trips). `mart_condition_effects` sums it
+by band; `rpt_weather_losses` sums it by month into **trips lost** (expected − actual) for the BI
+page. Conditions overlap — an hour of a snowy day can also be an hour of rain — so losses are
+never added up across conditions.
 
 ### Temperature
 
@@ -884,3 +902,41 @@ are two series plus a direct label, a tooltip on every mark, no dual axes. Effec
 one row per band, one dot per kind of rider — so the gap between commuters and casual riders is the
 first thing you see; on narrow screens the band name and its value move onto one line above the
 dots. Every chart is drawn through `resize()`, so it fits its panel from a phone to a wide screen.
+
+### The BI page
+
+`/bi` is the same site in tool mode, for a business reader: filters (months, kind of day, rider,
+bike), KPIs with the change against the previous period of the same length, demand (daily series,
+weekday × hour heatmap, months), weather (trips lost to rain by month, snow days, the effects
+table), stations (a map drawn by the stations themselves, a sortable table with a CSV download, a
+panel per station) and data quality (source → warehouse counts). It replaces the Looker Studio
+dashboard of version 1 ([decision 0018](decisions/0018-bi-page-instead-of-looker-studio.md)).
+
+**How it works without a server.** The page declares seven Parquet files in its front matter;
+Framework loads them into **DuckDB-WASM**, a full SQL engine running in the browser, and every
+`sql` block on the page is a query that interpolates the filter values (`${rider}`, `${from}`…) as
+parameters. Change a filter and every query that uses it runs again, in milliseconds, on about 1 MB
+of data. Nothing is queried in BigQuery when someone visits.
+
+**Where the files come from.** `make site-data` exports the dbt report models (`rpt_*`, chapter 10)
+as zstd Parquet into `site/src/data/bi/`. Each is shaped for one part of the page and states its
+grain; reconciliation tests check that the daily base, the heatmap and the station months add up
+to `fct_city_day`. They all read one intermediate table, `int_trip_hour_counts`, so the 44 million
+trips are scanned once per build, not once per report.
+
+**Numbers worth knowing how they are made.**
+- *Trips lost to rain* = expected − actual over rain hours, from the same comparison as the effects
+  (`fct_condition_periods`); rain and snow overlap, so they are never added together.
+- *A station's rain effect* compares its rain hours with its own dry hours of the same month, kind
+  of day and hour, over the months it was active; it is shown only where at least 1,000 trips were
+  expected in the rain (1,320 of 2,369 stations), with its counting noise.
+- Trips that do not start at a New York station (e-bikes left outside a dock, and 26 trips from
+  "LA Metro Demo" stations in Los Angeles that Citi Bike's files contain) count in the totals but
+  are not on the map.
+- Deltas compare with the previous period of equal length; the whole year has none.
+
+> **Problems we hit.** A class name collision: the KPI tile for rain used the class `rain`, which
+> the story page uses for its full-screen falling-rain layer (`position: absolute; inset: 0`) — the
+> tile stretched over the whole page and hid everything below it. Framework also wraps every
+> `${…}` in an element of its own, so a CSS grid around `${tiles}` saw one child: the grid has to be
+> inside the generated HTML.

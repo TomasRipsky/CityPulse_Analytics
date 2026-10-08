@@ -4,7 +4,7 @@
 Bike trip and every hour of New York's weather and air quality in Google Cloud, models them with
 dbt in BigQuery, orchestrates them with Airflow — and answers the question.
 
-**→ [The answers, as a site](https://tomasripsky.github.io/CityPulse_Analytics/)**
+**→ [The answers, as a site](https://tomasripsky.github.io/CityPulse_Analytics/)** · **[the BI page](https://tomasripsky.github.io/CityPulse_Analytics/bi): filter it yourself**
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![Airflow](https://img.shields.io/badge/Airflow-3.3-017CEE?logo=apacheairflow&logoColor=white)
@@ -40,7 +40,7 @@ flowchart LR
   bronze --> silver[("GCS Silver<br/>Parquet, true UTC")]
   silver -->|"manifest written last<br/>control totals"| raw[("BigQuery raw<br/>one partition per period")]
   raw --> dbt["dbt: staging → marts<br/>tests"]
-  dbt --> site["site"]
+  dbt --> site["site: story + BI page"]
   af{{"Airflow 3.3<br/>versioned image"}} -.-> bronze & raw & dbt
 ```
 
@@ -82,7 +82,7 @@ make destroy ENV=dev                                # tear everything down (test
 
 About **€0 a month**: BigQuery and Cloud Storage free tiers, no always-on compute (Airflow runs on
 the operator's machine when needed), a €5 budget alert per project and daily query quotas (20 GiB
-dev, 50 GiB prod) as a hard stop. A full dbt build on the year of data reads about 12 GB.
+dev, 50 GiB prod) as a hard stop. A full dbt build on the year of data reads about 20 GB.
 
 ## What changed in version 2
 

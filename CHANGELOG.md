@@ -3,6 +3,19 @@
 All notable changes to CityPulse. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [2.1.0] - 2026-10-08
+
+### Added
+- **A BI page** (`/bi`): filters by month, kind of day, rider and bike; KPIs against the previous
+  period; demand, weather losses, a station map, ranking and per-station panel, data quality, CSV
+  download. DuckDB-WASM queries Parquet exports in the browser — no server, €0
+  ([decision 0018](docs/decisions/0018-bi-page-instead-of-looker-studio.md)).
+- Report models (`rpt_*`) with reconciliation tests, fed by one scan of the trips
+  (`int_trip_hour_counts`); `fct_condition_periods` holds each period's expected vs actual trips.
+
+### Removed
+- The Looker Studio dashboard and the version 1 GCP project behind it.
+
 ## [2.0.2] - 2026-10-07
 
 ### Fixed

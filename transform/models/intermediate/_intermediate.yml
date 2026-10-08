@@ -55,6 +55,16 @@ models:
               arguments:
                 values: ["workday", "weekend", "holiday"]
 
+  - name: int_trip_hour_counts
+    description: >
+      Plausible trips per UTC hour, New York start station (null when the trip does not start at
+      one), rider and bike type — the single scan of the trips behind the BI report models. Grain:
+      hour_start × station_id × rider × bike_type.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["hour_start", "station_id", "rider", "bike_type"]
+
 unit_tests:
   - name: interval_variables_move_to_the_hour_they_describe
     model: int_weather_hours
