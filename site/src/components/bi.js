@@ -21,7 +21,7 @@ export function downloadButton(rows, filename) {
     const url = URL.createObjectURL(new Blob([d3.csvFormat(rows)], {type: "text/csv"}));
     const a = Object.assign(document.createElement("a"), {href: url, download: filename});
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000); // revoking at once can cancel the download
   };
   return button;
 }

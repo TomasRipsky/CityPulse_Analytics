@@ -67,7 +67,7 @@ const rangeLabel = from === to ? monthLabel(from) : `${monthLabel(from)} – ${m
 <section class="wrap bi-head">
   <p class="eyebrow">Self-service · Citi Bike × weather · New York</p>
   <h1>Demand, weather and stations — <em>${rangeLabel}</em></h1>
-  <p class="sub">Filter by months, kind of day, rider and bike: every number below answers. Data is frozen at April 2026 and computed from 44.5 million trips; how each figure is built is in <a href="https://github.com/TomasRipsky/CityPulse_Analytics/blob/main/docs/guide.md">the guide</a>.</p>
+  <p class="sub">Filter by months, kind of day, rider and bike: the numbers below follow them, and where one cannot, it says so. Data is frozen at April 2026 and computed from 44.5 million trips; how each figure is built is in <a href="https://github.com/TomasRipsky/CityPulse_Analytics/blob/main/docs/guide.md">the guide</a>.</p>
   ${kpiTiles}
 </section>
 
@@ -108,7 +108,7 @@ group by 1
 const pick = (rows, current) => Array.from(rows).find((d) => d.current === current);
 const k = pick(kpiRows, true) ?? {}, kp = pick(kpiRows, false);
 const dc = pick(dayCounts, true), dp = pick(dayCounts, false);
-const lc = pick(lostRows, true), lp = pick(lostRows, false);
+const lc = pick(lostRows, true);
 const perDay = (r, d) => (r && d ? r.trips / d.days : null);
 function delta(now, before, {points = false} = {}) {
   if (now == null || before == null || !hasPrev) return html`<small class="delta">no earlier period in the data</small>`;
@@ -131,7 +131,7 @@ const kpiTiles = html`<div class="kpis">
 <div class="wrap">
   <h2><span class="bullet blue">D</span>Demand</h2>
   <div class="panel">
-    <h3>Trips per day <small>stacked by rider · line: 7-day mean</small></h3>
+    <h3>Trips per day <small>stacked by rider · line: mean of the selected days in the last 7</small></h3>
     ${resize((width) => dailyChart(width))}
   </div>
   <div class="grid2 mt">
@@ -143,13 +143,44 @@ const kpiTiles = html`<div class="kpis">
 </section>
 
 ```sql id=dailyRows
-select local_date, rider, sum(trips)::DOUBLE as trips
-from day_riders
-where strftime(month, '%Y-%m') between ${from} and ${to}
-  and (${dayType} = 'all' or day_type = ${dayType})
-  and (${rider} = 'all' or rider = ${rider})
-  and (${bike} = 'all' or bike_type = ${bike})
-group by 1, 2 order by 1
+-- every selected day of the calendar, with 0 where nobody rode (the blizzard closure)
+with cal as (
+  select date::DATE as local_date from days
+  where strftime(date::DATE, '%Y-%m') between ${from} and ${to}
+    and (${dayType} = 'all' or (${dayType} = 'workday') = (day_type = 'workday'))
+),
+riders as (select unnest(['member', 'casual']) as rider),
+t as (
+  select local_date, rider, sum(trips) as trips from day_riders
+  where strftime(month, '%Y-%m') between ${from} and ${to}
+    and (${bike} = 'all' or bike_type = ${bike})
+  group by 1, 2
+)
+select c.local_date, r.rider, coalesce(t.trips, 0)::DOUBLE as trips
+from cal c cross join riders r
+left join t on t.local_date = c.local_date and t.rider = r.rider
+where ${rider} = 'all' or r.rider = ${rider}
+order by 1
+```
+
+```sql id=dailyTotals
+-- the line: mean of the selected days within the last 7 calendar days
+with cal as (
+  select date::DATE as local_date from days
+  where strftime(date::DATE, '%Y-%m') between ${from} and ${to}
+    and (${dayType} = 'all' or (${dayType} = 'workday') = (day_type = 'workday'))
+),
+t as (
+  select local_date, sum(trips) as trips from day_riders
+  where strftime(month, '%Y-%m') between ${from} and ${to}
+    and (${rider} = 'all' or rider = ${rider})
+    and (${bike} = 'all' or bike_type = ${bike})
+  group by 1
+),
+tot as (select c.local_date, coalesce(t.trips, 0) as trips from cal c left join t using (local_date))
+select local_date, trips::DOUBLE as trips,
+  avg(trips) over (order by local_date range between interval 6 days preceding and current row)::DOUBLE as mean7
+from tot order by 1
 ```
 
 ```sql id=monthRowsFiltered
@@ -179,7 +210,7 @@ from t group by 1, 2
 ```js
 const riderColor = {domain: ["member", "casual"], range: ["var(--series-1)", "var(--series-2)"], legend: true};
 const daily = Array.from(dailyRows, (d) => ({...d, local_date: new Date(d.local_date)}));
-const dayTotals = d3.rollups(daily, (v) => d3.sum(v, (d) => d.trips), (d) => +d.local_date).map(([t, trips]) => ({local_date: new Date(t), trips}));
+const dayTotals = Array.from(dailyTotals, (d) => ({...d, local_date: new Date(d.local_date)}));
 function dailyChart(width) {
   return Plot.plot({
     width, height: 260, marginLeft: 48,
@@ -187,18 +218,18 @@ function dailyChart(width) {
     y: {label: "trips per day", grid: true, tickFormat: "s"},
     color: riderColor,
     marks: [
-      Plot.areaY(daily, {x: "local_date", y: "trips", fill: "rider", order: ["member", "casual"], curve: "step"}),
-      Plot.lineY(dayTotals, Plot.windowY({k: 7}, {x: "local_date", y: "trips", stroke: "var(--ink)", strokeWidth: 1.5})),
-      Plot.tip(dayTotals, Plot.pointerX({x: "local_date", y: "trips", title: (d) => `${fmt.date(d.local_date)}\n${fmt.count(d.trips)} trips`}))
+      Plot.rectY(daily, {x: "local_date", interval: "day", y: "trips", fill: "rider", order: ["member", "casual"]}),
+      Plot.lineY(dayTotals, {x: "local_date", y: "mean7", stroke: "var(--ink)", strokeWidth: 1.5, curve: "monotone-x"}),
+      Plot.tip(dayTotals, Plot.pointerX({x: "local_date", y: "trips", title: (d) => `${fmt.date(d.local_date)}\n${d.trips === 0 ? "0 trips" : `${fmt.count(d.trips)} trips`}\n7-day mean ${fmt.count(Math.round(d.mean7))}`}))
     ]
   });
 }
 const weekdays = [2, 3, 4, 5, 6, 7, 1]; // BigQuery's dayofweek: 1 = Sunday
 function heatChart(width) {
   return Plot.plot({
-    width, height: 240, marginLeft: 34, padding: 0.06,
+    width, height: 240, marginLeft: 40, padding: 0.06,
     x: {label: "hour", ticks: [0, 6, 12, 18, 23]},
-    y: {label: null, domain: weekdays, tickFormat: (d) => "SMTWTFS"[d - 1]},
+    y: {label: null, domain: weekdays, tickFormat: (d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d - 1]},
     color: {type: "linear", range: ["#162238", "#8cc0ff"], label: "avg trips per hour", legend: true, tickFormat: "s"},
     marks: [
       Plot.cell(Array.from(heatRows), {x: "local_hour", y: "weekday_number", fill: "avg_trips", inset: 0.5, rx: 2, tip: true,
@@ -264,7 +295,7 @@ const snow = Array.from(snowRows);
 const snowTable = snow.length
   ? Inputs.table(snow, {
       columns: ["date", "snowfall_cm", "trips", "temperature_mean_c"],
-      header: {date: "Day", snowfall_cm: "Snow (cm)", trips: "Trips", temperature_mean_c: "Mean °C"},
+      header: {date: "Day", snowfall_cm: "Snow (cm)", trips: "Trips (everyone)", temperature_mean_c: "Mean °C"},
       format: {date: (d) => fmt.date(new Date(d)), trips: (d) => (d === 0 ? "0 — system closed" : fmt.count(d))},
       rows: 8, select: false
     })
@@ -293,10 +324,10 @@ const effectsTable = Inputs.table(effectRows, {
     <div class="panel station-panel">${stationPanel}</div>
   </div>
   <div class="panel mt">
-    <div class="table-head"><h3>All stations <small>pick a row to open it above · click a column to sort</small></h3>${downloadButton(stationList, `citypulse-stations-${from}-${to}.csv`)}</div>
+    <div class="table-head"><h3>All stations <small>pick a row to open it above · click a column to sort</small></h3>${downloadButton(stationList, `citypulse-stations-${from}-${to}-${dayType}-${rider}-${bike}.csv`)}</div>
     ${stationTable}
   </div>
-  <p class="footnote">Stations follow every filter. Trips that do not start at a New York station (about 22,000 e-bikes left outside a dock) count in the totals above but not here. A station's rain effect compares its rain hours with its own dry hours (same month, kind of day and hour) over its active months, and is shown only where at least 1,000 trips were expected in the rain; the ± is the counting noise alone.</p>
+  <p class="footnote">Trips and shares follow every filter; a share that a filter fixes (members when one rider type is picked, e-bikes when one bike type is) shows "—". The rain effect is a year-level, all-rider measurement and does not follow the filters. Trips that do not start at a New York station (about 22,000 e-bikes left outside a dock) count in the totals above but not here. A station's rain effect compares its rain hours with its own dry hours (same month, kind of day and hour) over its active months, and is shown only where at least 1,000 trips were expected in the rain; the ± is the counting noise alone.</p>
 </div>
 </section>
 
@@ -334,24 +365,33 @@ const stationList = Array.from(stationRows, (d, i) => ({rank: i + 1, ...d}));
 const rainNoise = (d) => (d.rain_effect_pct == null ? null : (196 * Math.sqrt(d.rain_trips)) / d.rain_expected_trips);
 const stationTable = Inputs.table(stationList, {
   columns: ["rank", "station_name", "trips", "member_share", "ebike_share", "rain_effect_pct"],
-  header: {rank: "#", station_name: "Station", trips: "Trips", member_share: "Members", ebike_share: "E-bikes", rain_effect_pct: "Rain effect"},
-  format: {trips: fmt.count, member_share: pct, ebike_share: pct, rain_effect_pct: (d) => (d == null ? "too little rain data" : fmt.signedPct(d))},
+  header: {rank: "#", station_name: "Station", trips: "Trips", member_share: "Members", ebike_share: "E-bikes", rain_effect_pct: "Rain effect (year, all riders)"},
+  format: {trips: fmt.count, member_share: (d) => (rider === "all" ? pct(d) : "—"), ebike_share: (d) => (bike === "all" ? pct(d) : "—"), rain_effect_pct: (d) => (d == null ? "too little rain data" : fmt.signedPct(d))},
   width: {rank: 40, station_name: 280},
   multiple: false, required: false, rows: 12
 });
-const picked = Generators.input(stationTable);
+// the picked station survives a filter change (the table is rebuilt, its selection is not)
+stationTable.addEventListener("input", () => stationTable.value && setPicked(stationTable.value.station_id));
 ```
 
 ```js
-const station = picked ?? stationList[0];
+const pickedId = Mutable(null);
+const setPicked = (id) => (pickedId.value = id);
+```
+
+```js
+const station = stationList.find((d) => d.station_id === pickedId) ?? stationList[0];
+// a share fixed by a filter (all members, all e-bikes) would paint one colour: fall back to trips
+const metricShown = (metric === "member share" && rider !== "all") || (metric === "e-bike share" && bike !== "all") ? "trips" : metric;
 const metricSpec = {
-  "trips": {value: "trips", color: {type: "sqrt", range: ["#2a4f86", "#cde2fb"], label: "trips", legend: true, tickFormat: "s"}},
-  "member share": {value: (d) => 100 * d.member_share, color: {type: "linear", range: ["#2a4f86", "#cde2fb"], label: "member share (%)", legend: true}},
-  "e-bike share": {value: (d) => 100 * d.ebike_share, color: {type: "linear", range: ["#2a4f86", "#cde2fb"], label: "e-bike share (%)", legend: true}},
-  "rain effect": {value: "rain_effect_pct", color: {type: "diverging", pivot: 0, range: ["#e66767", "#383835", "#3987e5"], label: "rain effect (%)", legend: true}}
-}[metric];
+  "trips": {value: "trips", color: {type: "sqrt", range: ["#3d6bb3", "#cde2fb"], label: "trips", legend: true, tickFormat: "s"}},
+  "member share": {value: (d) => 100 * d.member_share, color: {type: "linear", range: ["#3d6bb3", "#cde2fb"], label: "member share (%)", legend: true}},
+  "e-bike share": {value: (d) => 100 * d.ebike_share, color: {type: "linear", range: ["#3d6bb3", "#cde2fb"], label: "e-bike share (%)", legend: true}},
+  "rain effect": {value: "rain_effect_pct", color: {type: "diverging", pivot: 0, range: ["#e66767", "#8a8f99", "#3987e5"], label: "rain effect, year, all riders (%)", legend: true}}
+}[metricShown];
 function stationMap(width) {
-  const shown = metric === "rain effect" ? stationList.filter((d) => d.rain_effect_pct != null) : stationList;
+  if (!station) return html`<p class="muted">No station has trips in these filters.</p>`;
+  const shown = metricShown === "rain effect" ? stationList.filter((d) => d.rain_effect_pct != null) : stationList;
   return Plot.plot({
     width, height: Math.min(560, width * 1.15),
     projection: {type: "mercator", domain: {type: "MultiPoint", coordinates: stationList.map((d) => [d.lng, d.lat])}, inset: 8},
@@ -369,28 +409,34 @@ function stationMap(width) {
 ```sql id=stationMonthRows
 select strftime(month, '%Y-%m') as m, rider, sum(trips)::DOUBLE as trips
 from station_months
-where station_id = ${station.station_id}
+where station_id = ${station?.station_id ?? ""}
   and (${dayType} = 'all' or day_type = ${dayType})
 group by 1, 2 order by 1
 ```
 
 ```sql id=stationHourRows
-select day_type, local_hour::INTEGER as local_hour, sum(trips)::DOUBLE as trips
-from station_hours where station_id = ${station.station_id}
+-- an average day of each kind: the year has about 250 workdays and 115 weekend days and holidays
+with d as (
+  select case when day_type = 'workday' then 'workday' else 'weekend' end as day_type, count(*) as n
+  from days group by 1
+)
+select h.day_type, h.local_hour::INTEGER as local_hour, (sum(h.trips) / any_value(d.n))::DOUBLE as trips
+from station_hours h join d using (day_type)
+where h.station_id = ${station?.station_id ?? ""}
 group by 1, 2 order by 2
 ```
 
 ```js
-const noise = rainNoise(station);
-const stationPanel = html`
+const noise = station ? rainNoise(station) : null;
+const stationPanel = !station ? html`<p class="muted">No station has trips in these filters.</p>` : html`
   <p class="eyebrow">Station · ${station.active_months} active months</p>
   <h3 class="station-name">${station.station_name}</h3>
   <div class="tiles mini">
     <div class="tile"><b>${fmt.count(station.trips)}</b><span>trips in the filters</span></div>
-    <div class="tile member"><b>${pct(station.member_share)}</b><span>members</span></div>
-    <div class="tile"><b>${station.rain_effect_pct == null ? "—" : `${fmt.signedPct(station.rain_effect_pct)}`}</b><span>${station.rain_effect_pct == null ? "too little rain data" : `in the rain · ±${noise.toFixed(0)} pts`}</span></div>
+    <div class="tile member"><b>${rider === "all" ? pct(station.member_share) : "—"}</b><span>members</span></div>
+    <div class="tile"><b>${station.rain_effect_pct == null ? "—" : `${fmt.signedPct(station.rain_effect_pct)}`}</b><span>${station.rain_effect_pct == null ? "too little rain data" : `in the rain · year, all riders · ±${Math.max(1, Math.round(noise))} pts`}</span></div>
   </div>
-  <p class="mini-title">Trips per month · the whole year, by rider</p>
+  <p class="mini-title">Trips per month · by rider, every month, your kind-of-day filter</p>
   ${resize((width) => Plot.plot({
     width, height: 170, marginLeft: 40,
     x: {label: null, type: "band", tickFormat: (m) => monthLabel(m, true)},
@@ -398,7 +444,7 @@ const stationPanel = html`
     color: riderColor,
     marks: [Plot.barY(Array.from(stationMonthRows), {x: "m", y: "trips", fill: "rider", order: ["member", "casual"], insetLeft: 2, insetRight: 2, tip: true}), Plot.ruleY([0], {stroke: "var(--mist)"})]
   }))}
-  <p class="mini-title">Its day · trips by hour over the year</p>
+  <p class="mini-title">Its average day · trips per hour, over the year</p>
   ${resize((width) => Plot.plot({
     width, height: 170, marginLeft: 40,
     x: {label: null, ticks: [0, 6, 12, 18, 23]},
@@ -429,7 +475,8 @@ const bySource = d3.rollups(audit, (v) => ({periods: d3.sum(v, (d) => d.periods)
 const mismatched = d3.sum(audit, (d) => d.mismatched);
 const auditSummary = mismatched === 0 ? html`<b>All ${fmt.count(d3.sum(audit, (d) => d.periods))} periods match.</b>` : html`<b>${mismatched} periods do not match.</b>`;
 const auditTiles = html`<div class="tiles">${bySource.map(([source, s]) => html`<div class="tile"><b>${fmt.count(s.rows)}</b><span>${sourceName[source] ?? source} · ${s.periods} periods · ${s.mismatched === 0 ? "✓ all match" : `${s.mismatched} mismatched`}</span></div>`)}</div>`;
-const lastLoad = d3.max(audit, (d) => d.last_loaded_at) ?? "—";
+const lastLoaded = d3.max(audit, (d) => d.last_loaded_at);
+const lastLoad = lastLoaded ? d3.utcFormat("%-d %B %Y, %H:%M UTC")(new Date(lastLoaded)) : "—";
 const auditTable = Inputs.table(audit, {
   columns: ["source", "m", "periods", "source_rows", "loaded_rows", "mismatched"],
   header: {source: "Source", m: "Month", periods: "Periods", source_rows: "Rows at the source", loaded_rows: "Rows loaded", mismatched: "Mismatched"},
