@@ -1,0 +1,84 @@
+version: 2
+
+# Report models: shaped for the site's BI page (exported as Parquet by `citypulse site-export`).
+# Plausible trips only (1 min – 3 h); holidays count as weekends.
+models:
+  - name: rpt_day_riders
+    description: "Trips and minutes ridden per day, rider and bike type. Grain: local_date × rider × bike_type."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["local_date", "rider", "bike_type"]
+    columns:
+      - name: rider
+        data_tests:
+          - accepted_values:
+              arguments: {values: ["member", "casual"]}
+      - name: bike_type
+        data_tests:
+          - accepted_values:
+              arguments: {values: ["classic", "electric"]}
+
+  - name: rpt_week_hours
+    description: >
+      Trips per weekday and New York hour, summed over each month, with the number of such
+      weekdays in the month (for averages). Grain: month × weekday × local_hour × rider.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["month", "weekday_number", "local_hour", "rider"]
+
+  - name: rpt_stations
+    description: >
+      One row per start station: name, position (median of trip starts), the year's trips and
+      shares, and its own rain effect where at least 200 trips were expected in rain hours.
+      Grain: station_id.
+    columns:
+      - name: station_id
+        data_tests: [unique, not_null]
+      - name: lat
+        data_tests:
+          - in_range:
+              arguments: {min_value: 40.4, max_value: 41.0}
+      - name: lng
+        data_tests:
+          - in_range:
+              arguments: {min_value: -74.3, max_value: -73.6}
+      - name: member_share_pct
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 100}
+      - name: electric_share_pct
+        data_tests:
+          - in_range:
+              arguments: {min_value: 0, max_value: 100}
+
+  - name: rpt_station_months
+    description: "Trips per start station, month, kind of day and rider. Grain: station_id × month × day_type × rider."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["station_id", "month", "day_type", "rider"]
+
+  - name: rpt_station_hours
+    description: "A station's trips by New York hour over the year. Grain: station_id × day_type × local_hour."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["station_id", "day_type", "local_hour"]
+
+  - name: rpt_weather_losses
+    description: >
+      Trips lost (expected − actual) per month, weather condition, band and rider. Conditions
+      overlap: never sum losses across conditions. Grain: month × condition × band × rider.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["month", "condition", "band", "rider"]
+
+  - name: rpt_load_audit
+    description: "Rows counted at the source vs rows loaded, per source and month (latest load of each period). Grain: source × month."
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["source", "month"]

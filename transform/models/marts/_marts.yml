@@ -22,7 +22,7 @@ models:
         data_tests: [unique, not_null]
 
   - name: mart_city_month
-    description: "Monthly summary for dashboards. Grain: month."
+    description: "Monthly summary: totals and means, no ratios between units. Grain: month."
     columns:
       - name: month
         data_tests: [unique, not_null]
@@ -38,6 +38,16 @@ models:
       - unique_combination:
           arguments:
             columns: ["reference", "month", "day_type", "local_hour", "rider"]
+
+  - name: fct_condition_periods
+    description: >
+      Each period's actual trips next to the trips good conditions predict for it (mart_baselines),
+      per condition and rider: rain per hour, snow, wind and air quality per day. Grain: condition ×
+      period (local_date, hour_start for rain) × rider.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: ["condition", "local_date", "hour_start", "rider"]
 
   - name: mart_condition_effects
     description: >
@@ -58,8 +68,8 @@ models:
         data_tests: [unique, not_null]
 
 unit_tests:
-  - name: effect_is_actual_over_expected_minus_one
-    model: mart_condition_effects
+  - name: a_rain_hour_is_compared_with_the_same_dry_hour
+    model: fct_condition_periods
     given:
       - input: ref('fct_city_hour')
         rows:
@@ -73,12 +83,12 @@ unit_tests:
           - {reference: "dry hour", month: "2025-07-01", day_type: "workday", local_hour: 8, rider: "casual", expected_trips: 250}
     expect:
       rows:
-        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "all", trips: 700, expected_trips: 1000, effect_pct: -30.0}
-        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "member", trips: 600, expected_trips: 750, effect_pct: -20.0}
-        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "casual", trips: 100, expected_trips: 250, effect_pct: -60.0}
+        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "all", trips: 700, expected_trips: 1000}
+        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "member", trips: 600, expected_trips: 750}
+        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "casual", trips: 100, expected_trips: 250}
 
-  - name: daily_effects_compare_with_their_reference_band_and_holidays_count_as_weekends
-    model: mart_condition_effects
+  - name: daily_periods_compare_with_their_reference_band_and_holidays_count_as_weekends
+    model: fct_condition_periods
     given:
       - input: ref('fct_city_hour')
         rows: []
@@ -95,7 +105,19 @@ unit_tests:
           - {reference: "dry day", month: "2025-07-01", day_type: "weekend", local_hour: null, rider: "all", expected_trips: 80}
     expect:
       rows:
-        - {condition: "snow", band: "dry (reference)", rider: "all", trips: 80, expected_trips: 80, effect_pct: 0.0}
-        - {condition: "wind", band: "windy (55–70 km/h)", rider: "all", trips: 80, expected_trips: 100, effect_pct: -20.0}
-        - {condition: "wind", band: "windy (55–70 km/h)", rider: "member", trips: 50, expected_trips: 50, effect_pct: 0.0}
-        - {condition: "wind", band: "windy (55–70 km/h)", rider: "casual", trips: 30, expected_trips: 50, effect_pct: -40.0}
+        - {condition: "snow", band: "dry (reference)", rider: "all", trips: 80, expected_trips: 80}
+        - {condition: "wind", band: "windy (55–70 km/h)", rider: "all", trips: 80, expected_trips: 100}
+        - {condition: "wind", band: "windy (55–70 km/h)", rider: "member", trips: 50, expected_trips: 50}
+        - {condition: "wind", band: "windy (55–70 km/h)", rider: "casual", trips: 30, expected_trips: 50}
+
+  - name: effect_is_summed_actual_over_summed_expected_minus_one
+    model: mart_condition_effects
+    given:
+      - input: ref('fct_condition_periods')
+        rows:
+          # two rain hours: the effect weighs them by their expected trips, not 50/50
+          - {condition: "rain", band: "rain (1–4 mm/h)", band_order: 2, is_reference: false, rider: "all", trips: 700, expected_trips: 1000}
+          - {condition: "rain", band: "rain (1–4 mm/h)", band_order: 2, is_reference: false, rider: "all", trips: 300, expected_trips: 500}
+    expect:
+      rows:
+        - {condition: "rain", band: "rain (1–4 mm/h)", rider: "all", periods: 2, trips: 1000, expected_trips: 1500, effect_pct: -33.3}

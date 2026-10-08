@@ -1,5 +1,8 @@
 """Export the small, public aggregates the showcase site is built from (site/src/data/).
 
+The story page reads CSVs; the BI page reads Parquet files in `bi/` with DuckDB in the browser
+(typed columns, compressed, queried in place).
+
 The site never queries BigQuery: it is built from these files, committed with the site, so a
 build needs no cloud credentials. Only aggregates leave the warehouse (Citi Bike's licence allows
 analyses, not republishing the trips). Dates are written as text and there are no timestamps, so a
@@ -13,6 +16,7 @@ from pathlib import Path
 
 import pyarrow.compute as pc
 import pyarrow.csv as csv
+import pyarrow.parquet as pq
 
 EXPORTS = {
     "daily.csv": """
@@ -47,6 +51,20 @@ EXPORTS = {
         from `{project}.marts.mart_city_month` where days_with_trip_data > 0 order by month""",
 }
 
+# The BI page's files: one per report model, every column (the models are shaped for the page).
+BI_EXPORTS = {
+    f"{model}.parquet": f"select * from `{{project}}.marts.{model}` order by {order}"
+    for model, order in {
+        "rpt_day_riders": "local_date, rider, bike_type",
+        "rpt_week_hours": "month, weekday_number, local_hour, rider",
+        "rpt_stations": "station_id",
+        "rpt_station_months": "station_id, month, day_type, rider",
+        "rpt_station_hours": "station_id, day_type, local_hour",
+        "rpt_weather_losses": "month, condition, band_order, rider",
+        "rpt_load_audit": "source, month",
+    }.items()
+}
+
 
 def export(client, project: str, out: Path) -> list[str]:
     """Write every export and summary.json into `out`; return the file names."""
@@ -63,4 +81,8 @@ def export(client, project: str, out: Path) -> list[str]:
         "last_day": pc.max(daily["date"]).as_py(),
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    return [*EXPORTS, "summary.json"]
+    (out / "bi").mkdir(exist_ok=True)
+    for name, sql in BI_EXPORTS.items():
+        table = client.query(sql.format(project=project)).to_arrow()
+        pq.write_table(table, out / "bi" / name, compression="zstd")
+    return [*EXPORTS, "summary.json", *(f"bi/{name}" for name in BI_EXPORTS)]
