@@ -935,6 +935,13 @@ trips are scanned once per build, not once per report.
   are not on the map.
 - Deltas compare with the previous period of equal length; the whole year has none.
 
+> **Problem we hit after the release.** The page also gave DuckDB the story page's `daily.csv`.
+> DuckDB-WASM *sniffs* a CSV's dialect, and in some browsers it kept the header's quotes in the
+> column names (`"date"`), so every query on that table failed — and because all the page's tables
+> live in one DuckDB database, every chart failed with it. The calendar is now exported as Parquet
+> too (typed: nothing to guess), and a test fails if the page's `sql:` front matter ever lists
+> anything but Parquet.
+>
 > **Problems we hit.** A class name collision: the KPI tile for rain used the class `rain`, which
 > the story page uses for its full-screen falling-rain layer (`position: absolute; inset: 0`) — the
 > tile stretched over the whole page and hid everything below it. Framework also wraps every

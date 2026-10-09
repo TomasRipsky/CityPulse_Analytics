@@ -9,7 +9,7 @@ sql:
   station_hours: ./data/bi/rpt_station_hours.parquet
   losses: ./data/bi/rpt_weather_losses.parquet
   load_audit: ./data/bi/rpt_load_audit.parquet
-  days: ./data/daily.csv
+  days: ./data/bi/days.parquet
 ---
 
 ```js
