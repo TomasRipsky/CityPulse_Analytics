@@ -3,6 +3,13 @@
 All notable changes to CityPulse. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [SemVer](https://semver.org/).
 
+## [2.1.1] - 2026-10-09
+
+### Fixed
+- **The BI page broke in some browsers**: DuckDB-WASM read `daily.csv`'s quoted header into the
+  column names, and since every table shares one database, every chart failed. The calendar is
+  now Parquet like the rest, and a test keeps CSV out of the page's DuckDB tables.
+
 ## [2.1.0] - 2026-10-08
 
 ### Added

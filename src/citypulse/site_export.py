@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.csv as csv
 import pyarrow.parquet as pq
@@ -82,7 +83,14 @@ def export(client, project: str, out: Path) -> list[str]:
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     (out / "bi").mkdir(exist_ok=True)
+    # The BI page's calendar: the daily facts again, as Parquet with a real date type. DuckDB in the
+    # browser sniffs CSV headers, and some browsers read the quotes into the column names.
+    i = daily.schema.get_field_index("date")
+    days = daily.set_column(
+        i, "date", pc.cast(pc.strptime(daily["date"], "%Y-%m-%d", "s"), pa.date32())
+    )
+    pq.write_table(days, out / "bi" / "days.parquet", compression="zstd")
     for name, sql in BI_EXPORTS.items():
         table = client.query(sql.format(project=project)).to_arrow()
         pq.write_table(table, out / "bi" / name, compression="zstd")
-    return [*EXPORTS, "summary.json", *(f"bi/{name}" for name in BI_EXPORTS)]
+    return [*EXPORTS, "summary.json", "bi/days.parquet", *(f"bi/{name}" for name in BI_EXPORTS)]
